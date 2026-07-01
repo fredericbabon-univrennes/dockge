@@ -7,6 +7,7 @@ import packageJSON from "../package.json";
 import { log } from "./log";
 import * as socketIO from "socket.io";
 import express, { Express } from "express";
+import * as jwt from "jsonwebtoken";
 import { parse } from "ts-command-line-args";
 import https from "https";
 import http from "http";
@@ -374,7 +375,37 @@ export class DockgeServer {
                 this.afterLogin(dockgeSocket, await R.findOne("user") as User);
                 dockgeSocket.emit("autoLogin");
             } else {
-                log.debug("auth", "need auth");
+                // Try to authenticate via JWT token from cookie (injected by Nginx proxy)
+                const cookieHeader = socket.request.headers.cookie || (socket.handshake as any).headers.cookie || "";
+                let tokenValid = false;
+                
+                if (cookieHeader) {
+                    const cookies = cookieHeader.split(';').map(c => c.trim());
+                    for (const cookie of cookies) {
+                        if (cookie.startsWith('token=')) {
+                            const token = cookie.substring(6);
+                            try {
+                                const decoded = jwt.verify(token, this.jwtSecret) as any;
+                                // Token is valid, find and login user
+                                const user = await R.findOne("user", " id = ? AND active = 1 ", [decoded.id || decoded.username]) as User;
+                                if (user) {
+                                    this.afterLogin(dockgeSocket, user);
+                                    log.info("auth", `Socket.io auto-login via JWT token for user: ${user.username}`);
+                                    tokenValid = true;
+                                    dockgeSocket.emit("autoLogin");
+                                    break;
+                                }
+                            } catch (error) {
+                                log.warn("auth", `Invalid or expired JWT token in Socket.io connection: ${(error as Error).message}`);
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                if (!tokenValid) {
+                    log.debug("auth", "need auth");
+                }
             }
 
             // Socket disconnect
