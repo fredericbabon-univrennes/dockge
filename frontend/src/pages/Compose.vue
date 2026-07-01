@@ -550,6 +550,8 @@ export default {
             this.$root.emitAgent(this.endpoint, "dockerStats", (res) => {
                 if (res.ok) {
                     this.dockerStats = res.dockerStats;
+                    console.log("📊 Docker Stats reçues - Clés disponibles:", Object.keys(res.dockerStats));
+                    console.log("📊 Données complètes:", res.dockerStats);
                 }
                 if (!this.stopDockerStatsTimeout) {
                     this.startDockerStatsTimeout();

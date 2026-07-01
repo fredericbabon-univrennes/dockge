@@ -337,13 +337,23 @@ export default defineComponent({
         },
         statsInstances() {
             if (!this.serviceStatus) {
+                console.log("🔍 [" + this.name + "] Pas de serviceStatus");
                 return [];
             }
 
-            return this.serviceStatus
-                .map(s => this.dockerStats[s.name])
+            console.log("🔍 [" + this.name + "] Service Status:", this.serviceStatus);
+            console.log("🔍 [" + this.name + "] Cherche dans dockerStats les clés:", this.serviceStatus.map(s => s.name));
+            
+            const result = this.serviceStatus
+                .map(s => {
+                    console.log("🔍 [" + this.name + "] Cherche s.name='" + s.name + "' dans dockerStats:", s.name in this.dockerStats);
+                    return this.dockerStats[s.name];
+                })
                 .filter(s => !!s)
                 .sort((a, b) => a.Name.localeCompare(b.Name));
+            
+            console.log("🔍 [" + this.name + "] statsInstances résultat:", result);
+            return result;
         },
         status() {
             if (!this.serviceStatus) {
