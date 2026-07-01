@@ -62,6 +62,27 @@ export class MainSocketHandler extends SocketHandler {
             }
         });
 
+        // Refresh needSetup status (called by add-user script)
+        socket.on("refreshNeedSetup", async (callback) => {
+            try {
+                const userCount = (await R.knex("user").count("id as count").first()).count;
+                if (userCount > 0) {
+                    server.needSetup = false;
+                }
+                callback({
+                    ok: true,
+                    needSetup: server.needSetup,
+                });
+            } catch (e) {
+                if (e instanceof Error) {
+                    callback({
+                        ok: false,
+                        msg: e.message,
+                    });
+                }
+            }
+        });
+
         // Login by token
         socket.on("loginByToken", async (token, callback) => {
             const clientIP = await server.getClientIP(socket);
