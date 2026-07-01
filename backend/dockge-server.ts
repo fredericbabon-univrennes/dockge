@@ -203,7 +203,8 @@ export class DockgeServer {
         // API REST endpoint for authentication (required for setup scripts)
         this.app.post("/api/login", async (req, res) => {
             try {
-                const clientIP = await this.getClientIP({ socket: { remoteAddress: req.ip } } as any);
+                // For Express requests, use req.ip directly (no Socket.io object)
+                const clientIP = req.ip || "unknown";
                 
                 const { username, password } = req.body;
                 
