@@ -341,6 +341,12 @@ export default defineComponent({
                 return [];
             }
 
+            // Wait until dockerStats is populated before matching
+            if (!this.dockerStats || Object.keys(this.dockerStats).length === 0) {
+                console.log("🔍 [" + this.name + "] dockerStats vides - en attente des données");
+                return [];
+            }
+
             console.log("🔍 [" + this.name + "] Service Status:", this.serviceStatus);
             console.log("🔍 [" + this.name + "] Cherche dans dockerStats les clés:", this.serviceStatus.map(s => s.name));
             
