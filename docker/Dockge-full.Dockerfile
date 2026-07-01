@@ -48,7 +48,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libncursesw5-dev \
     && rm -rf /var/lib/apt/lists/* \
-    && git clone --depth 1 https://github.com/Mikay/htop-gpu.git /tmp/htop-gpu \
+    && git clone --depth 1 https://github.com/seongwon980/htop-gpu.git /tmp/htop-gpu \
     && cd /tmp/htop-gpu \
     && ./configure \
     && make \
