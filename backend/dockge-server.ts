@@ -379,28 +379,37 @@ export class DockgeServer {
                 const cookieHeader = socket.request.headers.cookie || (socket.handshake as any).headers.cookie || "";
                 let tokenValid = false;
                 
+                log.debug("auth", `Socket.io cookie header: ${cookieHeader ? cookieHeader.substring(0, 50) + "..." : "(empty)"}`);
+                
                 if (cookieHeader) {
                     const cookies = cookieHeader.split(';').map(c => c.trim());
                     for (const cookie of cookies) {
                         if (cookie.startsWith('token=')) {
                             const token = cookie.substring(6);
+                            log.debug("auth", `Found JWT token, length: ${token.length}`);
                             try {
                                 const decoded = jwt.verify(token, this.jwtSecret) as any;
-                                // Token is valid, find and login user
-                                const user = await R.findOne("user", " id = ? AND active = 1 ", [decoded.id || decoded.username]) as User;
+                                log.debug("auth", `JWT decoded successfully. Username: ${decoded.username}`);
+                                
+                                // Token is valid, find and login user by username
+                                const user = await R.findOne("user", " username = ? AND active = 1 ", [decoded.username]) as User;
                                 if (user) {
                                     this.afterLogin(dockgeSocket, user);
                                     log.info("auth", `Socket.io auto-login via JWT token for user: ${user.username}`);
                                     tokenValid = true;
                                     dockgeSocket.emit("autoLogin");
-                                    break;
+                                } else {
+                                    log.warn("auth", `JWT token valid but user not found in DB. Decoded data: id=${decoded.id}, username=${decoded.username}`);
                                 }
+                                break;
                             } catch (error) {
                                 log.warn("auth", `Invalid or expired JWT token in Socket.io connection: ${(error as Error).message}`);
                             }
                             break;
                         }
                     }
+                } else {
+                    log.debug("auth", "No cookie header found in Socket.io connection");
                 }
                 
                 if (!tokenValid) {
