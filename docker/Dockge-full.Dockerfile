@@ -42,20 +42,18 @@ COPY --chown=node:node --from=build /app/common ./common
 COPY --chown=node:node --from=build /app/extra ./extra
 COPY --chown=node:node package.json ./
 
-# Install htop-gpu from source
+# Install htop-gpu from source (Python-based)
 RUN apt-get update && apt-get install -y \
     git \
-    build-essential \
-    libncursesw5-dev \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/* \
     && git clone --depth 1 https://github.com/seongwon980/htop-gpu.git /tmp/htop-gpu \
     && cd /tmp/htop-gpu \
-    && ./configure \
-    && make \
-    && make install \
+    && pip3 install -e . \
     && cd / \
     && rm -rf /tmp/htop-gpu \
-    && apt-get remove -y git build-essential libncursesw5-dev \
+    && apt-get remove -y git \
     && apt-get autoremove -y
 
 # Create data directory
