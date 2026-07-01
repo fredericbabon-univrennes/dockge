@@ -34,12 +34,9 @@ FROM louislam/dockge:base AS release
 
 WORKDIR /app
 
-# Copy healthcheck binary from base
-COPY --from=build /app/frontend-dist /tmp/frontend-dist 2>/dev/null || true
-
-# Copy compiled dependencies and source
-COPY --from=build /app/node_modules ./node_modules
+# Copy compiled frontend and dependencies from build stage
 COPY --from=build /app/frontend-dist ./frontend-dist
+COPY --from=build /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/backend ./backend
 COPY --chown=node:node --from=build /app/common ./common
 COPY --chown=node:node --from=build /app/extra ./extra
