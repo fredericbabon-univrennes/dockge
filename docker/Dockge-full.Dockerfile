@@ -42,8 +42,21 @@ COPY --chown=node:node --from=build /app/common ./common
 COPY --chown=node:node --from=build /app/extra ./extra
 COPY --chown=node:node package.json ./
 
-# Attempt to install htop-gpu in release stage as well
-RUN apt-get update && apt-get install -y htop-gpu || echo "htop-gpu not available in apt repos"
+# Install htop-gpu from source
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    libncursesw5-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone --depth 1 https://github.com/Mikay/htop-gpu.git /tmp/htop-gpu \
+    && cd /tmp/htop-gpu \
+    && ./configure \
+    && make \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/htop-gpu \
+    && apt-get remove -y git build-essential libncursesw5-dev \
+    && apt-get autoremove -y
 
 # Create data directory
 RUN mkdir ./data
