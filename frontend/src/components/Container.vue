@@ -86,6 +86,7 @@
                         v-for="stat in statsInstances"
                         :key="stat.Name"
                         :stat="stat"
+                        :gpuStats="gpuStats[stat.Name]"
                     />
                 </div>
             </transition>
@@ -218,6 +219,10 @@ export default defineComponent({
             default: null,
         },
         dockerStats: {
+            type: Object,
+            default: null
+        },
+        gpuStats: {
             type: Object,
             default: null
         }

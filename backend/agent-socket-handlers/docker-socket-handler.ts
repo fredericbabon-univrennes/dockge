@@ -246,9 +246,12 @@ export class DockerSocketHandler extends AgentSocketHandler {
                 checkLogin(socket);
 
                 const dockerStats = Object.fromEntries(await server.getDockerStats());
+                const gpuStats = Object.fromEntries(await server.getDockerGPUMemoryStats());
+
                 callbackResult({
                     ok: true,
                     dockerStats,
+                    gpuStats: Object.keys(gpuStats).length > 0 ? gpuStats : null,
                 }, callback);
                 server.sendStackList();
             } catch (e) {

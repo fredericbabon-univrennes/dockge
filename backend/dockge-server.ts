@@ -77,6 +77,11 @@ export class DockgeServer {
      */
     needSetup = false;
 
+    /**
+     * GPU Support Available (htop-gpu installed on host)
+     */
+    hasGPUSupport = false;
+
     jwtSecret : string = "";
 
     stacksDir : string = "";
@@ -461,6 +466,9 @@ export class DockgeServer {
         // Create all the necessary directories
         this.initDataDir();
 
+        // Initialize GPU support detection
+        await this.initGPUSupport();
+
         // Connect to database
         try {
             await Database.init(this);
@@ -746,6 +754,27 @@ export class DockgeServer {
         return list;
     }
 
+    /**
+     * Initialize GPU support detection by checking if htop-gpu is available
+     */
+    private async initGPUSupport() {
+        try {
+            const res = await childProcessAsync.spawn("htop-gpu", ["--version"], {
+                encoding: "utf-8",
+            });
+            if (res.stdout || !res.stderr?.includes("not found")) {
+                this.hasGPUSupport = true;
+                log.info("server", "GPU support: enabled (htop-gpu)");
+            } else {
+                this.hasGPUSupport = false;
+                log.info("server", "GPU support: disabled");
+            }
+        } catch (e) {
+            this.hasGPUSupport = false;
+            log.debug("server", "GPU support: disabled - htop-gpu not available");
+        }
+    }
+
     async getDockerStats() : Promise<Map<string, object>> {
         let stats = new Map<string, object>();
 
@@ -772,6 +801,82 @@ export class DockgeServer {
         } catch (e) {
             log.error("getDockerStats", e);
             return stats;
+        }
+    }
+
+    /**
+     * Get GPU memory stats per container by parsing htop-gpu output
+     */
+    async getDockerGPUMemoryStats() : Promise<Map<string, object>> {
+        let gpuStats = new Map<string, object>();
+
+        if (!this.hasGPUSupport) {
+            return gpuStats;
+        }
+
+        try {
+            const res = await childProcessAsync.spawn("htop-gpu", [], {
+                encoding: "utf-8",
+            });
+
+            if (!res.stdout) {
+                return gpuStats;
+            }
+
+            const output = res.stdout.toString();
+            const lines = output.split("\n");
+
+            // Parse htop-gpu output to extract GPU memory per container
+            // Format: GPU   PID  USER    GPU MEM  %CPU  %MEM      TIME  COMMAND [container_name(...)]
+            for (const line of lines) {
+                // Look for lines with GPU process data (should have brackets with container name)
+                if (line.includes("[") && line.includes("]")) {
+                    try {
+                        // Extract container name from [container_name(...)]
+                        const containerMatch = line.match(/\[([^\(\)]+)\(/);
+                        if (!containerMatch || !containerMatch[1]) {
+                            continue;
+                        }
+
+                        const containerName = containerMatch[1].trim();
+
+                        // Extract GPU memory value (format: "XXXMIB" or "X.XGiB")
+                        // Column order: GPU   PID  USER    GPU MEM  %CPU  %MEM      TIME  COMMAND
+                        const parts = line.split(/\s+/);
+                        let gpuMemMib = 0;
+
+                        // Find GPU MEM column (after USER column, should be 4th data field)
+                        for (let i = 0; i < parts.length; i++) {
+                            if (parts[i].match(/\d+MiB|\d+\.\d+GiB/)) {
+                                const memStr = parts[i];
+                                if (memStr.includes("GiB")) {
+                                    gpuMemMib = Math.round(parseFloat(memStr) * 1024);
+                                } else if (memStr.includes("MiB")) {
+                                    gpuMemMib = parseInt(memStr);
+                                }
+                                break;
+                            }
+                        }
+
+                        if (gpuMemMib > 0) {
+                            // Sum GPU memory if container already has entries (multiple processes)
+                            if (gpuStats.has(containerName)) {
+                                const existing = gpuStats.get(containerName) as { gpu_memory_mib: number };
+                                existing.gpu_memory_mib += gpuMemMib;
+                            } else {
+                                gpuStats.set(containerName, { gpu_memory_mib: gpuMemMib });
+                            }
+                        }
+                    } catch (parseError) {
+                        log.debug("server", "Failed to parse htop-gpu line: " + line);
+                    }
+                }
+            }
+
+            return gpuStats;
+        } catch (e) {
+            log.debug("server", "Failed to get GPU stats: " + (e as Error).message);
+            return gpuStats;
         }
     }
 

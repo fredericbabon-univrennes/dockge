@@ -130,6 +130,7 @@
                             :first="name === Object.keys(jsonConfig.services)[0]"
                             :serviceStatus="serviceStatusList[name]"
                             :dockerStats="dockerStats"
+                            :gpuStats="gpuStats"
                             @start-service="startService"
                             @stop-service="stopService"
                             @restart-service="restartService"
@@ -338,6 +339,7 @@ export default {
             },
             serviceStatusList: {},
             dockerStats: {},
+            gpuStats: {},
             isEditMode: false,
             submitted: false,
             showDeleteDialog: false,
@@ -550,6 +552,7 @@ export default {
             this.$root.emitAgent(this.endpoint, "dockerStats", (res) => {
                 if (res.ok) {
                     this.dockerStats = res.dockerStats;
+                    this.gpuStats = res.gpuStats || {};
                     console.log("📊 Docker Stats reçues - Clés disponibles:", Object.keys(res.dockerStats));
                     console.log("📊 Données complètes:", res.dockerStats);
                 }
