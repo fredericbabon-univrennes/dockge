@@ -50,7 +50,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && git clone --depth 1 https://github.com/seongwon980/htop-gpu.git /tmp/htop-gpu \
     && cd /tmp/htop-gpu \
-    && pip3 install -e . \
+    && pip3 install --break-system-packages -e . \
     && cd / \
     && rm -rf /tmp/htop-gpu \
     && apt-get remove -y git \
