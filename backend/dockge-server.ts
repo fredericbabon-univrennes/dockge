@@ -7,7 +7,7 @@ import packageJSON from "../package.json";
 import { log } from "./log";
 import * as socketIO from "socket.io";
 import express, { Express } from "express";
-import * as jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import { parse } from "ts-command-line-args";
 import https from "https";
 import http from "http";
