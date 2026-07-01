@@ -19,7 +19,7 @@ import checkVersion from "./check-version";
 import dayjs from "dayjs";
 import { R } from "redbean-node";
 import { genSecret, isDev, LooseObject } from "../common/util-common";
-import { generatePasswordHash } from "./password-hash";
+import { generatePasswordHash, verifyPassword } from "./password-hash";
 import { Bean } from "redbean-node/dist/bean";
 import { Arguments, Config, DockgeSocket } from "./util-server";
 import { DockerSocketHandler } from "./agent-socket-handlers/docker-socket-handler";
@@ -196,6 +196,74 @@ export class DockgeServer {
         this.app.use("/", expressStaticGzip("frontend-dist", {
             enableBrotli: true,
         }));
+
+        // JSON body parser for API routes
+        this.app.use(express.json());
+
+        // API REST endpoint for authentication (required for setup scripts)
+        this.app.post("/api/login", async (req, res) => {
+            try {
+                const clientIP = await this.getClientIP({ socket: { remoteAddress: req.ip } } as any);
+                
+                const { username, password } = req.body;
+                
+                // Validation
+                if (!username || typeof username !== "string") {
+                    log.warn("auth", `API Login: Missing or invalid username. IP=${clientIP}`);
+                    return res.status(400).json({ 
+                        ok: false, 
+                        msg: "Missing or invalid username" 
+                    });
+                }
+                
+                if (!password || typeof password !== "string") {
+                    log.warn("auth", `API Login: Missing or invalid password. IP=${clientIP}`);
+                    return res.status(400).json({ 
+                        ok: false, 
+                        msg: "Missing or invalid password" 
+                    });
+                }
+                
+                // Find user in database
+                const user = await R.findOne("user", " username = ? AND active = 1 ", [username]) as User;
+                
+                if (!user) {
+                    log.warn("auth", `API Login: User not found or inactive: ${username}. IP=${clientIP}`);
+                    return res.status(401).json({ 
+                        ok: false, 
+                        msg: "Invalid credentials" 
+                    });
+                }
+                
+                // Verify password
+                if (!verifyPassword(password, user.password)) {
+                    log.warn("auth", `API Login: Invalid password for user: ${username}. IP=${clientIP}`);
+                    return res.status(401).json({ 
+                        ok: false, 
+                        msg: "Invalid credentials" 
+                    });
+                }
+                
+                // Generate JWT token
+                const token = User.createJWT(user, this.jwtSecret);
+                
+                log.info("auth", `API Login: Successfully authenticated user ${username}. IP=${clientIP}`);
+                
+                res.json({ 
+                    ok: true, 
+                    token: token,
+                    msg: "Login successful" 
+                });
+                
+            } catch (error) {
+                const err = error as Error;
+                log.error("auth", `API Login error: ${err.message}`);
+                res.status(500).json({ 
+                    ok: false, 
+                    msg: "Internal server error" 
+                });
+            }
+        });
 
         // Universal Route Handler, must be at the end of all express routes.
         this.app.get("*", async (_request, response) => {
