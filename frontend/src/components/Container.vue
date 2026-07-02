@@ -65,31 +65,14 @@
             </button>
         </div>
         <div v-else-if="statsInstances.length > 0" class="mt-2">
-            <div class="d-flex align-items-center gap-3">
-                <template v-if="!expandedStats">
-                    <div class="stats">
-                        {{ $t('CPU') }}: {{ statsInstances[0].CPUPerc }}
-                    </div>
-                    <div class="stats">
-                        {{ $t('memoryAbbreviated') }}: {{ statsInstances[0].MemUsage }}
-                    </div>
-                </template>
-                <div class="d-flex flex-grow-1 justify-content-end">
-                    <button class="btn btn-sm btn-normal" @click="expandedStats = !expandedStats">
-                        <font-awesome-icon :icon="expandedStats ? 'chevron-up' : 'chevron-down'" />
-                    </button>
-                </div>
+            <div class="d-flex flex-column gap-3">
+                <DockerStat
+                    v-for="stat in statsInstances"
+                    :key="stat.Name"
+                    :stat="stat"
+                    :gpuStats="gpuStats[stat.Name]"
+                />
             </div>
-            <transition name="slide-fade" appear>
-                <div v-if="expandedStats" class="d-flex flex-column gap-3 mt-2">
-                    <DockerStat
-                        v-for="stat in statsInstances"
-                        :key="stat.Name"
-                        :stat="stat"
-                        :gpuStats="gpuStats[stat.Name]"
-                    />
-                </div>
-            </transition>
         </div>
 
         <transition name="slide-fade" appear>
@@ -235,7 +218,6 @@ export default defineComponent({
     data() {
         return {
             showConfig: false,
-            expandedStats: false,
         };
     },
     computed: {
