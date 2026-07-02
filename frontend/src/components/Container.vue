@@ -70,7 +70,8 @@
                     v-for="stat in statsInstances"
                     :key="stat.Name"
                     :stat="stat"
-                    :gpuStats="gpuStats[stat.Name]"
+                    :gpuStats="gpuStats"
+                    :stackName="stackName"
                 />
             </div>
         </div>

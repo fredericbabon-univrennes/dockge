@@ -36,12 +36,12 @@
                     {{ stat.BlockIO }}
                 </div>
             </div>
-            <div v-if="gpuStats && gpuStats.gpu_memory_mib" class="stat">
+            <div v-if="stackName && gpuStats && gpuStats[stackName] && gpuStats[stackName].gpu_memory_mib" class="stat">
                 <div class="stat-label">
                     🎮 GPU Memory
                 </div>
                 <div>
-                    {{ gpuStats.gpu_memory_mib }} MiB
+                    {{ gpuStats[stackName].gpu_memory_mib }} MiB
                 </div>
             </div>
         </div>
@@ -57,6 +57,10 @@ export default {
         },
         gpuStats: {
             type: Object,
+            default: null
+        },
+        stackName: {
+            type: String,
             default: null
         }
     },
