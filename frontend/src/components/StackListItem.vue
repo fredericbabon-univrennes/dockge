@@ -3,7 +3,6 @@
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <div class="title">
             <span>{{ stackName }}</span>
-            <span class="debug-info" style="font-size: 10px; color: red; margin-left: 10px;">GPU={{ totalGpuMemory }}MiB</span>
             <span v-if="totalGpuMemory > 0" class="gpu-memory-badge">🎮 {{ totalGpuMemory }} MiB</span>
         </div>
     </router-link>
@@ -79,7 +78,6 @@ export default {
         },
         totalGpuMemory() {
             if (!this.gpuStats || !this.stack.name) {
-                console.log("🔍 StackListItem debug - stack:", this.stack?.name, "gpuStats:", this.gpuStats ? Object.keys(this.gpuStats) : "undefined");
                 return 0;
             }
             let total = 0;
@@ -90,10 +88,8 @@ export default {
             for (const containerName in this.gpuStats) {
                 if (containerName.startsWith(stackNamePrefix) && this.gpuStats[containerName].gpu_memory_mib) {
                     total += this.gpuStats[containerName].gpu_memory_mib;
-                    console.log("🎮 Found GPU memory for", containerName, ":", this.gpuStats[containerName].gpu_memory_mib, "MiB");
                 }
             }
-            console.log("📊 Total GPU for stack", this.stack.name, ":", total, "MiB")
             return total;
         }
     },

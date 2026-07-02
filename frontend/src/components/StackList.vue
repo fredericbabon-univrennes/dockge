@@ -107,6 +107,7 @@ export default {
                 tags: null,
             },
             closedAgents: new Map(),
+            gpuStatsRefreshInterval: null,
         };
     },
     computed: {
@@ -290,9 +291,19 @@ export default {
     },
     mounted() {
         window.addEventListener("scroll", this.onScroll);
+        // Request GPU stats immediately and then every 5 seconds
+        this.requestGPUStats();
+        this.gpuStatsRefreshInterval = setInterval(() => {
+            this.requestGPUStats();
+        }, 5000);
     },
     beforeUnmount() {
         window.removeEventListener("scroll", this.onScroll);
+        // Clean up the GPU stats refresh interval
+        if (this.gpuStatsRefreshInterval) {
+            clearInterval(this.gpuStatsRefreshInterval);
+            this.gpuStatsRefreshInterval = null;
+        }
     },
     methods: {
         /**
@@ -314,6 +325,22 @@ export default {
         clearSearchText() {
             this.searchText = "";
         },
+
+        /**
+         * Request GPU stats from backend and update global cache
+         * @returns {void}
+         */
+        requestGPUStats() {
+            this.$root.emitAgent("", "dockerStats", (res) => {
+                if (res.ok && res.gpuStats) {
+                    this.$root.globalGpuStats = res.gpuStats;
+                    console.log("📊 StackList - GPU stats updated:", res.gpuStats);
+                } else {
+                    console.log("📊 StackList - No GPU stats in response");
+                }
+            });
+        },
+
         /**
          * Update the StackList Filter
          * @param {object} newFilter Object with new filter
