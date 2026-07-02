@@ -806,7 +806,7 @@ export class DockgeServer {
     }
 
     /**
-     * Get GPU memory stats per container by parsing htop-gpu output
+     * Get GPU memory stats per container by parsing htop-gpu JSON output
      */
     async getDockerGPUMemoryStats() : Promise<Map<string, object>> {
         let gpuStats = new Map<string, object>();
@@ -828,25 +828,15 @@ export class DockgeServer {
             const jsonData = JSON.parse(output);
 
             // Parse htop-gpu JSON output to extract GPU memory per container
-            // Expected structure: { "processes": [ { "container": "name", "gpu_memory": "XMiB", ... }, ... ] }
+            // Expected structure: { "processes": [ { "container_name": "name", "gpu_mem_mib": 102, ... }, ... ] }
             if (jsonData.processes && Array.isArray(jsonData.processes)) {
                 for (const proc of jsonData.processes) {
-                    if (!proc.container) {
+                    if (!proc.container_name) {
                         continue;
                     }
 
-                    const containerName = proc.container.trim();
-                    let gpuMemMib = 0;
-
-                    // Parse GPU memory (format: "XMiB" or "X.XGiB")
-                    if (proc.gpu_memory) {
-                        const memStr = proc.gpu_memory.toString();
-                        if (memStr.includes("GiB")) {
-                            gpuMemMib = Math.round(parseFloat(memStr) * 1024);
-                        } else if (memStr.includes("MiB")) {
-                            gpuMemMib = parseInt(memStr);
-                        }
-                    }
+                    const containerName = proc.container_name.trim();
+                    const gpuMemMib = proc.gpu_mem_mib ? parseInt(proc.gpu_mem_mib) : 0;
 
                     if (gpuMemMib > 0) {
                         // Sum GPU memory if container already has entries (multiple processes)
@@ -860,6 +850,7 @@ export class DockgeServer {
                 }
             }
 
+            log.debug("server", "GPU stats collected: " + JSON.stringify(Object.fromEntries(gpuStats)));
             return gpuStats;
         } catch (e) {
             log.debug("server", "Failed to get GPU stats: " + (e as Error).message);
