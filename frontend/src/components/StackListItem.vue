@@ -3,6 +3,8 @@
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <div class="title">
             <span>{{ stackName }}</span>
+            <!-- Debug: Always show what we're computing -->
+            <span style="font-size: 10px; color: purple; margin-left: 8px;">[gpu={{ totalGpuMemory }}]</span>
             <span v-if="totalGpuMemory > 0" class="gpu-memory-badge">🎮 {{ totalGpuMemory }} MiB</span>
         </div>
     </router-link>
@@ -77,6 +79,11 @@ export default {
             return this.stack.name;
         },
         totalGpuMemory() {
+            const result = this._computeTotalGpuMemory();
+            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, result);
+            return result;
+        },
+        _computeTotalGpuMemory() {
             if (!this.gpuStats || !this.stack.name) {
                 return 0;
             }
@@ -94,9 +101,11 @@ export default {
         }
     },
     watch: {
-        isSelectMode() {
-            // TODO: Resize the heartbeat bar, but too slow
-            // this.$refs.heartbeatBar.resize();
+        gpuStats: {
+            handler(newVal) {
+                console.log("👁️ StackListItem watch gpuStats changed for", this.stack.name, ":", newVal);
+            },
+            deep: true
         }
     },
     beforeMount() {

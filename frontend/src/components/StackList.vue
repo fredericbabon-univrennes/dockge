@@ -290,6 +290,7 @@ export default {
         },
     },
     mounted() {
+        console.log("✅ StackList MOUNTED - starting GPU stats polling");
         window.addEventListener("scroll", this.onScroll);
         // Request GPU stats immediately and then every 5 seconds
         this.requestGPUStats();
@@ -331,12 +332,14 @@ export default {
          * @returns {void}
          */
         requestGPUStats() {
+            console.log("📊 StackList.requestGPUStats() called");
             this.$root.emitAgent("", "dockerStats", (res) => {
                 if (res.ok && res.gpuStats) {
+                    console.log("✅ GPU stats received:", Object.keys(res.gpuStats));
                     this.$root.globalGpuStats = res.gpuStats;
-                    console.log("📊 StackList - GPU stats updated:", res.gpuStats);
+                    console.log("🌍 globalGpuStats updated:", this.$root.globalGpuStats);
                 } else {
-                    console.log("📊 StackList - No GPU stats in response");
+                    console.log("❌ No GPU stats in response:", res);
                 }
             });
         },
