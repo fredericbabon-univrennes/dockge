@@ -876,7 +876,7 @@ export class DockgeServer {
 
         try {
             // Get all managed stacks
-            const stacks = Stack.getManagedStackList();
+            const stacks = await Stack.getStackList(this);
             log.info("server", "🔍 getContainerToStackMapping: Found " + stacks.size + " stacks");
             
             for (const [stackName, stack] of stacks) {
