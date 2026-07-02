@@ -759,10 +759,11 @@ export class DockgeServer {
      */
     private async initGPUSupport() {
         try {
-            const res = await childProcessAsync.spawn("htop-gpu", ["--version"], {
+            const res = await childProcessAsync.spawn("htop-gpu", ["-h"], {
                 encoding: "utf-8",
             });
-            if (res.stdout || !res.stderr?.includes("not found")) {
+            // Check if help output exists (command succeeded)
+            if (res.stdout || res.stderr) {
                 this.hasGPUSupport = true;
                 log.info("server", "GPU support: enabled (htop-gpu)");
             } else {
@@ -815,7 +816,7 @@ export class DockgeServer {
         }
 
         try {
-            const res = await childProcessAsync.spawn("htop-gpu", [], {
+            const res = await childProcessAsync.spawn("htop-gpu", ["--json"], {
                 encoding: "utf-8",
             });
 
@@ -824,51 +825,37 @@ export class DockgeServer {
             }
 
             const output = res.stdout.toString();
-            const lines = output.split("\n");
+            const jsonData = JSON.parse(output);
 
-            // Parse htop-gpu output to extract GPU memory per container
-            // Format: GPU   PID  USER    GPU MEM  %CPU  %MEM      TIME  COMMAND [container_name(...)]
-            for (const line of lines) {
-                // Look for lines with GPU process data (should have brackets with container name)
-                if (line.includes("[") && line.includes("]")) {
-                    try {
-                        // Extract container name from [container_name(...)]
-                        const containerMatch = line.match(/\[([^\(\)]+)\(/);
-                        if (!containerMatch || !containerMatch[1]) {
-                            continue;
+            // Parse htop-gpu JSON output to extract GPU memory per container
+            // Expected structure: { "processes": [ { "container": "name", "gpu_memory": "XMiB", ... }, ... ] }
+            if (jsonData.processes && Array.isArray(jsonData.processes)) {
+                for (const proc of jsonData.processes) {
+                    if (!proc.container) {
+                        continue;
+                    }
+
+                    const containerName = proc.container.trim();
+                    let gpuMemMib = 0;
+
+                    // Parse GPU memory (format: "XMiB" or "X.XGiB")
+                    if (proc.gpu_memory) {
+                        const memStr = proc.gpu_memory.toString();
+                        if (memStr.includes("GiB")) {
+                            gpuMemMib = Math.round(parseFloat(memStr) * 1024);
+                        } else if (memStr.includes("MiB")) {
+                            gpuMemMib = parseInt(memStr);
                         }
+                    }
 
-                        const containerName = containerMatch[1].trim();
-
-                        // Extract GPU memory value (format: "XXXMIB" or "X.XGiB")
-                        // Column order: GPU   PID  USER    GPU MEM  %CPU  %MEM      TIME  COMMAND
-                        const parts = line.split(/\s+/);
-                        let gpuMemMib = 0;
-
-                        // Find GPU MEM column (after USER column, should be 4th data field)
-                        for (let i = 0; i < parts.length; i++) {
-                            if (parts[i].match(/\d+MiB|\d+\.\d+GiB/)) {
-                                const memStr = parts[i];
-                                if (memStr.includes("GiB")) {
-                                    gpuMemMib = Math.round(parseFloat(memStr) * 1024);
-                                } else if (memStr.includes("MiB")) {
-                                    gpuMemMib = parseInt(memStr);
-                                }
-                                break;
-                            }
+                    if (gpuMemMib > 0) {
+                        // Sum GPU memory if container already has entries (multiple processes)
+                        if (gpuStats.has(containerName)) {
+                            const existing = gpuStats.get(containerName) as { gpu_memory_mib: number };
+                            existing.gpu_memory_mib += gpuMemMib;
+                        } else {
+                            gpuStats.set(containerName, { gpu_memory_mib: gpuMemMib });
                         }
-
-                        if (gpuMemMib > 0) {
-                            // Sum GPU memory if container already has entries (multiple processes)
-                            if (gpuStats.has(containerName)) {
-                                const existing = gpuStats.get(containerName) as { gpu_memory_mib: number };
-                                existing.gpu_memory_mib += gpuMemMib;
-                            } else {
-                                gpuStats.set(containerName, { gpu_memory_mib: gpuMemMib });
-                            }
-                        }
-                    } catch (parseError) {
-                        log.debug("server", "Failed to parse htop-gpu line: " + line);
                     }
                 }
             }
