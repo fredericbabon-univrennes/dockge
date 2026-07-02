@@ -877,37 +877,45 @@ export class DockgeServer {
         try {
             // Get all managed stacks
             const stacks = Stack.getManagedStackList();
+            log.info("server", "🔍 getContainerToStackMapping: Found " + stacks.size + " stacks");
             
             for (const [stackName, stack] of stacks) {
                 try {
+                    log.info("server", `  📚 Stack "${stackName}": reading compose...`);
+                    
                     // Get the compose YAML
                     const composeYAML = stack.composeYAML;
                     if (!composeYAML) {
+                        log.info("server", `    ❌ No compose YAML found`);
                         continue;
                     }
 
                     // Parse YAML to find container names
                     const parsed = yaml.parse(composeYAML);
                     if (!parsed.services) {
+                        log.info("server", `    ❌ No services found in compose`);
                         continue;
                     }
+
+                    log.info("server", `    ✓ Services: ${Object.keys(parsed.services).join(", ")}`);
 
                     // Check each service for container_name
                     for (const serviceName in parsed.services) {
                         const service = parsed.services[serviceName];
                         if (service.container_name) {
                             mapping.set(service.container_name, stackName);
+                            log.info("server", `      ✓ Map "${service.container_name}" → stack "${stackName}"`);
                         }
                     }
                 } catch (e) {
-                    log.debug("server", `Failed to parse compose for stack ${stackName}: ${(e as Error).message}`);
+                    log.error("server", `❌ Failed to parse compose for stack ${stackName}: ${(e as Error).message}`);
                 }
             }
 
-            log.debug("server", "Container to stack mapping (from compose files): " + JSON.stringify(Object.fromEntries(mapping)));
+            log.info("server", "✅ Final mapping: " + JSON.stringify(Object.fromEntries(mapping)));
             return mapping;
         } catch (e) {
-            log.debug("server", "Failed to get container to stack mapping: " + (e as Error).message);
+            log.error("server", "❌ Failed to get container to stack mapping: " + (e as Error).message);
             return mapping;
         }
     }
