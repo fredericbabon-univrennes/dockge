@@ -868,6 +868,53 @@ export class DockgeServer {
     }
 
     /**
+     * Get mapping of container names to stack names using Docker labels
+     * Docker Compose sets the com.docker.compose.project label on all containers
+     */
+    async getContainerToStackMapping(): Promise<Map<string, string>> {
+        const mapping = new Map<string, string>();
+
+        try {
+            const res = await childProcessAsync.spawn("docker", ["ps", "--format", "json"], {
+                encoding: "utf-8",
+            });
+
+            if (!res.stdout) {
+                return mapping;
+            }
+
+            const output = res.stdout.toString();
+            const containers = JSON.parse(output);
+
+            if (Array.isArray(containers)) {
+                for (const container of containers) {
+                    const labels = container.Labels ? container.Labels.split(",") : [];
+                    let stackName = null;
+
+                    // Look for com.docker.compose.project label
+                    for (const label of labels) {
+                        if (label.startsWith("com.docker.compose.project=")) {
+                            stackName = label.split("=")[1];
+                            break;
+                        }
+                    }
+
+                    if (stackName && container.Names) {
+                        const containerName = container.Names.split(",")[0].replace(/^\//, "");
+                        mapping.set(containerName, stackName);
+                    }
+                }
+            }
+
+            log.debug("server", "Container to stack mapping: " + JSON.stringify(Object.fromEntries(mapping)));
+            return mapping;
+        } catch (e) {
+            log.debug("server", "Failed to get container to stack mapping: " + (e as Error).message);
+            return mapping;
+        }
+    }
+
+    /**
      * Raw GPU memory stats collection (called by background task)
      */
     async getDockerGPUMemoryStatsRaw() : Promise<Map<string, object>> {
@@ -878,6 +925,9 @@ export class DockgeServer {
         }
 
         try {
+            // Get container to stack mapping
+            const containerToStack = await this.getContainerToStackMapping();
+
             const res = await childProcessAsync.spawn("htop-gpu", ["--json"], {
                 encoding: "utf-8",
             });
@@ -901,18 +951,21 @@ export class DockgeServer {
                     const gpuMemMib = proc.gpu_mem_mib ? parseInt(proc.gpu_mem_mib) : 0;
 
                     if (gpuMemMib > 0) {
-                        // Sum GPU memory if container already has entries (multiple processes)
-                        if (gpuStats.has(containerName)) {
-                            const existing = gpuStats.get(containerName) as { gpu_memory_mib: number };
+                        // Use stack name as key if available, otherwise use container name
+                        const key = containerToStack.get(containerName) || containerName;
+                        
+                        // Sum GPU memory if key already exists (multiple containers in stack or multiple processes)
+                        if (gpuStats.has(key)) {
+                            const existing = gpuStats.get(key) as { gpu_memory_mib: number };
                             existing.gpu_memory_mib += gpuMemMib;
                         } else {
-                            gpuStats.set(containerName, { gpu_memory_mib: gpuMemMib });
+                            gpuStats.set(key, { gpu_memory_mib: gpuMemMib });
                         }
                     }
                 }
             }
 
-            log.debug("server", "GPU stats collected: " + JSON.stringify(Object.fromEntries(gpuStats)));
+            log.debug("server", "GPU stats collected (by stack): " + JSON.stringify(Object.fromEntries(gpuStats)));
             return gpuStats;
         } catch (e) {
             log.debug("server", "Failed to get GPU stats: " + (e as Error).message);

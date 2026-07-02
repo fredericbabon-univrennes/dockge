@@ -82,24 +82,20 @@ export default {
             if (!this.gpuStats || !this.stack.name) {
                 return 0;
             }
-            let total = 0;
-            const stackNamePrefix = this.stack.name + "_";
-            
-            // Sum GPU memory for all containers belonging to this stack
-            // Docker compose names containers as: stackname_servicename_1
-            for (const containerName in this.gpuStats) {
-                if (containerName.startsWith(stackNamePrefix) && this.gpuStats[containerName].gpu_memory_mib) {
-                    total += this.gpuStats[containerName].gpu_memory_mib;
-                }
-            }
-            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, total);
-            return total;
+
+            // Backend now returns GPU stats keyed by stack name
+            const stackGpuMem = this.gpuStats[this.stack.name]?.gpu_memory_mib || 0;
+            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, stackGpuMem);
+            return stackGpuMem;
         }
     },
     watch: {
         gpuStats: {
             handler(newVal) {
-                console.log("👁️ StackListItem watch gpuStats changed for", this.stack.name, ":", newVal);
+                if (newVal && this.stack.name) {
+                    const stackGpu = newVal[this.stack.name]?.gpu_memory_mib || 0;
+                    console.log(`👁️ [${this.stack.name}] gpuStats updated: ${stackGpu} MiB`);
+                }
             },
             deep: true
         }
