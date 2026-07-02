@@ -77,13 +77,17 @@ export default {
             return this.stack.name;
         },
         totalGpuMemory() {
-            if (!this.gpuStats || !this.stack.services) {
+            if (!this.gpuStats || !this.stack.name) {
                 return 0;
             }
             let total = 0;
-            for (const service of this.stack.services) {
-                if (this.gpuStats[service] && this.gpuStats[service].gpu_memory_mib) {
-                    total += this.gpuStats[service].gpu_memory_mib;
+            const stackNamePrefix = this.stack.name + "_";
+            
+            // Sum GPU memory for all containers belonging to this stack
+            // Docker compose names containers as: stackname_servicename_1
+            for (const containerName in this.gpuStats) {
+                if (containerName.startsWith(stackNamePrefix) && this.gpuStats[containerName].gpu_memory_mib) {
+                    total += this.gpuStats[containerName].gpu_memory_mib;
                 }
             }
             return total;
