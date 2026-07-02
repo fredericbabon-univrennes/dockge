@@ -2,9 +2,7 @@
     <router-link :to="url" :class="{ 'dim' : !stack.isManagedByDockge }" class="item">
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <div class="title">
-            <span>{{ stackName }}</span>
-            <!-- Debug: Always show what we're computing -->
-            <span style="font-size: 10px; color: purple; margin-left: 8px;">[gpu={{ totalGpuMemory }}]</span>
+            <span>{{ stackName }}</span>            
             <span v-if="totalGpuMemory > 0" class="gpu-memory-badge">🎮 {{ totalGpuMemory }} MiB</span>
         </div>
     </router-link>
@@ -85,7 +83,7 @@ export default {
 
             // Backend now returns GPU stats keyed by stack name
             const stackGpuMem = this.gpuStats[this.stack.name]?.gpu_memory_mib || 0;
-            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, stackGpuMem);
+            // console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, stackGpuMem);
             return stackGpuMem;
         }
     },
@@ -94,7 +92,7 @@ export default {
             handler(newVal) {
                 if (newVal && this.stack.name) {
                     const stackGpu = newVal[this.stack.name]?.gpu_memory_mib || 0;
-                    console.log(`👁️ [${this.stack.name}] gpuStats updated: ${stackGpu} MiB`);
+                    // console.log(`👁️ [${this.stack.name}] gpuStats updated: ${stackGpu} MiB`);
                 }
             },
             deep: true

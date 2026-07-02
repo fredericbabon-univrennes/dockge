@@ -554,9 +554,9 @@ export default {
                     this.dockerStats = res.dockerStats;
                     this.gpuStats = res.gpuStats || {};
                     this.$root.globalGpuStats = res.gpuStats || {};
-                    console.log("📊 Docker Stats reçues - Clés disponibles:", Object.keys(res.dockerStats));
-                    console.log("📊 Données GPU:", res.gpuStats);
-                    console.log("🌍 globalGpuStats mis à jour:", this.$root.globalGpuStats);
+                    // console.log("📊 Docker Stats reçues - Clés disponibles:", Object.keys(res.dockerStats));
+                    // console.log("📊 Données GPU:", res.gpuStats);
+                    // console.log("🌍 globalGpuStats mis à jour:", this.$root.globalGpuStats);
                 }
                 if (!this.stopDockerStatsTimeout) {
                     this.startDockerStatsTimeout();
