@@ -79,11 +79,6 @@ export default {
             return this.stack.name;
         },
         totalGpuMemory() {
-            const result = this._computeTotalGpuMemory();
-            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, result);
-            return result;
-        },
-        _computeTotalGpuMemory() {
             if (!this.gpuStats || !this.stack.name) {
                 return 0;
             }
@@ -97,6 +92,7 @@ export default {
                     total += this.gpuStats[containerName].gpu_memory_mib;
                 }
             }
+            console.log(`🎮 [${this.stack.name}] totalGpuMemory computed =`, total);
             return total;
         }
     },
