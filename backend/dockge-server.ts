@@ -868,45 +868,43 @@ export class DockgeServer {
     }
 
     /**
-     * Get mapping of container names to stack names using Docker labels
-     * Docker Compose sets the com.docker.compose.project label on all containers
+     * Get mapping of container names to stack names by reading compose files
+     * Builds a map from container_name (in compose files) to stack name
      */
     async getContainerToStackMapping(): Promise<Map<string, string>> {
         const mapping = new Map<string, string>();
 
         try {
-            const res = await childProcessAsync.spawn("docker", ["ps", "--format", "json"], {
-                encoding: "utf-8",
-            });
+            // Get all managed stacks
+            const stacks = Stack.getManagedStackList();
+            
+            for (const [stackName, stack] of stacks) {
+                try {
+                    // Get the compose YAML
+                    const composeYAML = stack.composeYAML;
+                    if (!composeYAML) {
+                        continue;
+                    }
 
-            if (!res.stdout) {
-                return mapping;
-            }
+                    // Parse YAML to find container names
+                    const parsed = yaml.parse(composeYAML);
+                    if (!parsed.services) {
+                        continue;
+                    }
 
-            const output = res.stdout.toString();
-            const containers = JSON.parse(output);
-
-            if (Array.isArray(containers)) {
-                for (const container of containers) {
-                    const labels = container.Labels ? container.Labels.split(",") : [];
-                    let stackName = null;
-
-                    // Look for com.docker.compose.project label
-                    for (const label of labels) {
-                        if (label.startsWith("com.docker.compose.project=")) {
-                            stackName = label.split("=")[1];
-                            break;
+                    // Check each service for container_name
+                    for (const serviceName in parsed.services) {
+                        const service = parsed.services[serviceName];
+                        if (service.container_name) {
+                            mapping.set(service.container_name, stackName);
                         }
                     }
-
-                    if (stackName && container.Names) {
-                        const containerName = container.Names.split(",")[0].replace(/^\//, "");
-                        mapping.set(containerName, stackName);
-                    }
+                } catch (e) {
+                    log.debug("server", `Failed to parse compose for stack ${stackName}: ${(e as Error).message}`);
                 }
             }
 
-            log.debug("server", "Container to stack mapping: " + JSON.stringify(Object.fromEntries(mapping)));
+            log.debug("server", "Container to stack mapping (from compose files): " + JSON.stringify(Object.fromEntries(mapping)));
             return mapping;
         } catch (e) {
             log.debug("server", "Failed to get container to stack mapping: " + (e as Error).message);
