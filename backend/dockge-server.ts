@@ -82,6 +82,21 @@ export class DockgeServer {
      */
     hasGPUSupport = false;
 
+    /**
+     * Cached Docker stats (updated every 5 seconds in background)
+     */
+    cachedDockerStats : Map<string, object> = new Map();
+
+    /**
+     * Cached GPU stats (updated every 5 seconds in background)
+     */
+    cachedGPUStats : Map<string, object> = new Map();
+
+    /**
+     * Background task interval ID for stats caching
+     */
+    statsRefreshInterval: NodeJS.Timer | null = null;
+
     jwtSecret : string = "";
 
     stacksDir : string = "";
@@ -469,6 +484,9 @@ export class DockgeServer {
         // Initialize GPU support detection
         await this.initGPUSupport();
 
+        // Start background stats refresh task
+        this.startStatsRefreshTask();
+
         // Connect to database
         try {
             await Database.init(this);
@@ -776,7 +794,44 @@ export class DockgeServer {
         }
     }
 
+    /**
+     * Background task: refresh Docker and GPU stats every 5 seconds
+     */
+    private startStatsRefreshTask() {
+        // Initial fetch immediately
+        this.refreshStatsCache();
+
+        // Then refresh every 5 seconds
+        this.statsRefreshInterval = setInterval(async () => {
+            try {
+                await this.refreshStatsCache();
+                log.debug("server", "Background stats cache updated");
+            } catch (e) {
+                log.error("server", "Error refreshing stats cache: " + (e as Error).message);
+            }
+        }, 5000);
+    }
+
+    private async refreshStatsCache() {
+        try {
+            this.cachedDockerStats = await this.getDockerStatsRaw();
+            this.cachedGPUStats = await this.getDockerGPUMemoryStatsRaw();
+        } catch (e) {
+            log.error("server", "Error fetching initial stats: " + (e as Error).message);
+        }
+    }
+
+    /**
+     * Get cached Docker stats (from background task)
+     */
     async getDockerStats() : Promise<Map<string, object>> {
+        return this.cachedDockerStats;
+    }
+
+    /**
+     * Raw Docker stats collection (called by background task)
+     */
+    async getDockerStatsRaw() : Promise<Map<string, object>> {
         let stats = new Map<string, object>();
 
         try {
@@ -806,9 +861,16 @@ export class DockgeServer {
     }
 
     /**
-     * Get GPU memory stats per container by parsing htop-gpu JSON output
+     * Get cached GPU memory stats (from background task)
      */
     async getDockerGPUMemoryStats() : Promise<Map<string, object>> {
+        return this.cachedGPUStats;
+    }
+
+    /**
+     * Raw GPU memory stats collection (called by background task)
+     */
+    async getDockerGPUMemoryStatsRaw() : Promise<Map<string, object>> {
         let gpuStats = new Map<string, object>();
 
         if (!this.hasGPUSupport) {
@@ -872,6 +934,12 @@ export class DockgeServer {
         log.info("server", "Called signal: " + signal);
 
         // TODO: Close all terminals?
+
+        // Stop background stats refresh task
+        if (this.statsRefreshInterval) {
+            clearInterval(this.statsRefreshInterval);
+            this.statsRefreshInterval = null;
+        }
 
         await Database.close();
         Settings.stopCacheCleaner();
