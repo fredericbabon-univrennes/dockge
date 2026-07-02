@@ -66,7 +66,7 @@
                 <StackListItem
                     v-for="(item, index) in agent.stacks"
                     v-show="$root.agentCount === 1 || !closedAgents.get(agent.endpoint)" :key="index" :stack="item" :isSelectMode="selectMode"
-                    :isSelected="isSelected" :select="select" :deselect="deselect"
+                    :isSelected="isSelected" :select="select" :deselect="deselect" :gpuStats="$root.globalGpuStats"
                 />
             </div>
         </div>

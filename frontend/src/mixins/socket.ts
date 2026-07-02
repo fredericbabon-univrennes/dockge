@@ -45,6 +45,9 @@ export default defineComponent({
             agentList: {
 
             },
+
+            // Global GPU stats (cached from all stacks)
+            globalGpuStats: {},
         };
     },
     computed: {

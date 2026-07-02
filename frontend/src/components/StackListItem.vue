@@ -3,6 +3,7 @@
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <div class="title">
             <span>{{ stackName }}</span>
+            <span v-if="totalGpuMemory > 0" class="gpu-memory-badge">🎮 {{ totalGpuMemory }} MiB</span>
         </div>
     </router-link>
 </template>
@@ -45,6 +46,11 @@ export default {
             type: Function,
             default: () => {}
         },
+        /** GPU stats for all containers */
+        gpuStats: {
+            type: Object,
+            default: null,
+        },
     },
     data() {
         return {
@@ -69,6 +75,18 @@ export default {
         },
         stackName() {
             return this.stack.name;
+        },
+        totalGpuMemory() {
+            if (!this.gpuStats || !this.stack.services) {
+                return 0;
+            }
+            let total = 0;
+            for (const service of this.stack.services) {
+                if (this.gpuStats[service] && this.gpuStats[service].gpu_memory_mib) {
+                    total += this.gpuStats[service].gpu_memory_mib;
+                }
+            }
+            return total;
         }
     },
     watch: {
@@ -175,6 +193,16 @@ export default {
 
 .dim {
     opacity: 0.5;
+}
+
+.gpu-memory-badge {
+    font-size: 12px;
+    margin-left: 8px;
+    padding: 2px 6px;
+    background-color: #e8f4f8;
+    border-radius: 4px;
+    color: #0066cc;
+    font-weight: 500;
 }
 
 </style>
