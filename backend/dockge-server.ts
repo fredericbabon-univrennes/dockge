@@ -563,12 +563,16 @@ export class DockgeServer {
 
         // Load existing Nginx configurations
         if (this.generateNginxOnStackCreate) {
+            log.info("server", `🔍 Attempting to load Nginx configs from: ${this.nginxConfigDir}`);
             try {
                 const { loadExistingNginxConfigs } = await import("./nginx-config-loader");
                 this.nginxConfigCache = await loadExistingNginxConfigs(this.nginxConfigDir);
+                log.info("server", `✅ Loaded ${Object.keys(this.nginxConfigCache).length} Nginx config(s): [${Object.keys(this.nginxConfigCache).join(", ")}]`);
             } catch (e) {
-                log.warn("server", `Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
+                log.error("server", `❌ Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
             }
+        } else {
+            log.debug("server", "⏭️  Nginx generation disabled, skipping config loader");
         }
 
         // First time setup if needed
