@@ -299,12 +299,10 @@ import dotenv from "dotenv";
 import { ref } from "vue";
 
 const template = `
+version: '3.8'
+
 services:
-  nginx:
-    image: nginx:latest
-    restart: unless-stopped
-    ports:
-      - "8080:80"
+  # Add your services here
 `;
 const envDefault = "# VARIABLE=value #comment";
 
