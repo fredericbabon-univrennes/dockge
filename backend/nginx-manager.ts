@@ -64,11 +64,14 @@ export class NginxManager {
             );
 
             // ========== 3. VALIDATE CONFIGS ==========
-            const preValidation = this.generator.validateConfig(nginxConfigs.preSsl);
-            const postValidation = this.generator.validateConfig(nginxConfigs.postSsl);
+            // preSsl (port 80) is just for ACME challenges, no proxy_pass needed
+            const preValidation = this.generator.validateConfig(nginxConfigs.preSsl, false);
+            // postSsl (port 443) must have proxy_pass
+            const postValidation = this.generator.validateConfig(nginxConfigs.postSsl, true);
 
             if (!preValidation.valid || !postValidation.valid) {
                 const errors = [...preValidation.errors, ...postValidation.errors];
+                log.error("nginx-manager", `❌ Validation details:\n${JSON.stringify({ preSsl: preValidation, postSsl: postValidation }, null, 2)}`);
                 throw new Error(`Config validation failed: ${errors.join(", ")}`);
             }
 

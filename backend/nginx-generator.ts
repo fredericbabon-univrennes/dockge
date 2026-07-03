@@ -39,6 +39,8 @@ export class NginxGenerator {
         const effectivePort = port || 8080;
         const effectivePathPrefix = pathPrefix || "/";
 
+        console.log(`[NGINX-GENERATOR] 📝 Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
+
         return {
             preSsl: this.generatePreSslConfig(stackName, fqdn || stackName, acmeDir),
             postSsl: this.generatePostSslConfig(
@@ -186,7 +188,7 @@ export class NginxGenerator {
      * Validate generated Nginx configuration
      * Basic syntax checks
      */
-    validateConfig(configContent: string): { valid: boolean; errors: string[] } {
+    validateConfig(configContent: string, requireProxyPass: boolean = true): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
 
         if (!configContent) {
@@ -206,8 +208,10 @@ export class NginxGenerator {
             errors.push("Missing 'server_name' directive");
         }
 
-        if (!configContent.includes("proxy_pass ") && configContent.includes("location")) {
-            errors.push("Missing 'proxy_pass' directive in location block");
+        // Only check for proxy_pass if this is a service config (postSsl)
+        // preSsl is just for ACME and redirects, doesn't need proxy_pass
+        if (requireProxyPass && configContent.includes("location") && !configContent.includes("proxy_pass ")) {
+            errors.push("Missing 'proxy_pass' directive - no valid proxy location found");
         }
 
         return {
