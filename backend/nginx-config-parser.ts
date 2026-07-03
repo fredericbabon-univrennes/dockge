@@ -1,6 +1,6 @@
 /**
  * NGINX Configuration Parsing Utilities
- * Simplified - no presets, just utilities to extract info from existing configs
+ * Extracts configuration data from existing Nginx configs
  */
 
 /**
@@ -66,4 +66,3 @@ export interface NginxStackConfig {
     pathPrefix: string;
     fqdn: string | null;
 }
-

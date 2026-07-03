@@ -3,7 +3,6 @@
  * Generates pre-SSL (port 80) and post-SSL (port 443) Nginx configurations
  */
 
-import { getPresetForService } from "./nginx-presets";
 import { log } from "./log";
 
 export interface NginxGeneratedConfigs {
@@ -15,8 +14,8 @@ export class NginxGenerator {
     /**
      * Generate both pre-SSL and post-SSL configurations
      * @param stackName - Name of the stack
-     * @param port - Service port (optional, will use preset if available)
-     * @param pathPrefix - URL path prefix (optional, will use preset if available)
+     * @param port - Service port (defaults to 8080)
+     * @param pathPrefix - URL path prefix (defaults to "/")
      * @param fqdn - Fully qualified domain name (e.g., jupyter.192-168-1-1.sslip.io)
      * @param acmeDir - ACME challenge directory
      * @param sslCert - Path to SSL certificate
@@ -36,18 +35,9 @@ export class NginxGenerator {
         allowedIps: string[] = ["127.0.0.1"],
         dockgeToken?: string
     ): NginxGeneratedConfigs {
-        // Detect preset if applicable
-        let effectivePort = port || 8080;
-        let effectivePathPrefix = pathPrefix || "/";
-
-        const preset = getPresetForService(stackName);
-        if (preset) {
-            effectivePort = preset.port;
-            effectivePathPrefix = preset.path_prefix;
-            log.info("nginx-generator", `✅ Preset detected for '${stackName}': port=${effectivePort}, path_prefix=${effectivePathPrefix}`);
-        } else {
-            log.warn("nginx-generator", `⚠️  No preset found for '${stackName}', using defaults`);
-        }
+        // Use provided parameters directly (simplified approach without presets)
+        const effectivePort = port || 8080;
+        const effectivePathPrefix = pathPrefix || "/";
 
         return {
             preSsl: this.generatePreSslConfig(stackName, fqdn || stackName, acmeDir),

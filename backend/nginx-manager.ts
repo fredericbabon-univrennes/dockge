@@ -11,7 +11,7 @@ import { Stack } from "./stack";
 import { DockgeServer } from "./dockge-server";
 import { log } from "./log";
 import { NginxGenerator, NginxGeneratedConfigs } from "./nginx-generator";
-import { getDefaultPathPrefix } from "./nginx-presets";
+import { getDefaultPathPrefix } from "./nginx-config-parser";
 
 export interface StackNginxInfo {
     name: string;

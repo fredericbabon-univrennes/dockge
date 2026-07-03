@@ -6,7 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { log } from "./log";
-import { extractPathPrefixFromNginxConfig, extractPortFromNginxConfig, extractFqdnFromNginxConfig, NginxStackConfig } from "./nginx-presets";
+import { extractPathPrefixFromNginxConfig, extractPortFromNginxConfig, extractFqdnFromNginxConfig, NginxStackConfig } from "./nginx-config-parser";
 
 export interface NginxConfigCache {
     [stackName: string]: NginxStackConfig;
