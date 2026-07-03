@@ -143,6 +143,11 @@ export class DockgeServer {
     nginxDomainSuffix: string = "sslip.io";
 
     /**
+     * Public IP address for FQDN generation (detected automatically)
+     */
+    nginxPublicIp: string | null = null;
+
+    /**
      * List of IP addresses allowed to access services via Nginx
      */
     nginxAllowedIps: string[] = ["127.0.0.1"];
@@ -570,6 +575,20 @@ export class DockgeServer {
                 log.info("server", `✅ Loaded ${Object.keys(this.nginxConfigCache).length} Nginx config(s): [${Object.keys(this.nginxConfigCache).join(", ")}]`);
             } catch (e) {
                 log.error("server", `❌ Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
+            }
+
+            // Load public IP for FQDN generation (non-blocking)
+            try {
+                const { NginxGenerator } = await import("./nginx-generator");
+                const generator = new NginxGenerator();
+                this.nginxPublicIp = await generator.getPublicIp();
+                if (this.nginxPublicIp) {
+                    log.info("server", `✅ Detected public IP: ${this.nginxPublicIp}`);
+                } else {
+                    log.warn("server", `⚠️  Public IP detection failed, will use domain suffix only`);
+                }
+            } catch (e) {
+                log.warn("server", `⚠️  Failed to detect public IP: ${e instanceof Error ? e.message : String(e)}`);
             }
         } else {
             log.debug("server", "⏭️  Nginx generation disabled, skipping config loader");

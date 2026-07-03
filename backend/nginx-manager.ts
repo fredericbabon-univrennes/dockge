@@ -327,8 +327,17 @@ export class NginxManager {
         const pathPrefix = customPathPrefix || getDefaultPathPrefix();
         log.debug("nginx-manager", `   ✅ Final pathPrefix: ${pathPrefix}`);
 
-        // Generate FQDN
-        const fqdn = `${stackNameLower}.${this.server.nginxDomainSuffix}`;
+        // Generate FQDN with IP-dashed format if public IP is available
+        let fqdn: string;
+        if (this.server.nginxPublicIp) {
+            const generator = new NginxGenerator();
+            const ipDashed = generator.formatIpForDomain(this.server.nginxPublicIp);
+            fqdn = `${stackNameLower}.${ipDashed}.${this.server.nginxDomainSuffix}`;
+            log.debug("nginx-manager", `   📍 Public IP detected: using ${ipDashed}`);
+        } else {
+            fqdn = `${stackNameLower}.${this.server.nginxDomainSuffix}`;
+            log.warn("nginx-manager", `   ⚠️  No public IP available, FQDN without IP: ${fqdn}`);
+        }
         log.debug("nginx-manager", `   ✅ FQDN: ${fqdn}`);
 
         return {

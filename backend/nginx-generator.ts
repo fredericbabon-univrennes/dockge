@@ -4,6 +4,7 @@
  */
 
 import { log } from "./log";
+import https from "https";
 
 export interface NginxGeneratedConfigs {
     preSsl: string;
@@ -11,6 +12,58 @@ export interface NginxGeneratedConfigs {
 }
 
 export class NginxGenerator {
+    /**
+     * Fetch the public IP address
+     * Tries Google Cloud metadata first, then other methods
+     */
+    async getPublicIp(): Promise<string | null> {
+        try {
+            // Try Google Cloud metadata service
+            return await this.getPublicIpFromGcp();
+        } catch (e) {
+            log.warn("nginx-generator", `Failed to get public IP from GCP: ${e.message}`);
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch public IP from Google Cloud metadata service
+     */
+    private getPublicIpFromGcp(): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const options = {
+                hostname: "metadata.google.internal",
+                path: "/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip",
+                method: "GET",
+                headers: {
+                    "Metadata-Flavor": "Google"
+                },
+                timeout: 3000
+            };
+
+            https.request(options, (res) => {
+                let data = "";
+                res.on("data", chunk => data += chunk);
+                res.on("end", () => {
+                    const ip = data.trim();
+                    if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+                        resolve(ip);
+                    } else {
+                        reject(new Error("Invalid IP format"));
+                    }
+                });
+            }).on("error", reject).end();
+        });
+    }
+
+    /**
+     * Format IP address with dashes for domain names
+     * Example: "192.168.1.1" -> "192-168-1-1"
+     */
+    formatIpForDomain(ip: string): string {
+        return ip.replace(/\./g, "-");
+    }
     /**
      * Generate both pre-SSL and post-SSL configurations
      * @param stackName - Name of the stack
@@ -102,15 +155,6 @@ export class NginxGenerator {
         const locationPath = pathPrefix === "/" ? "/" : pathPrefix;
         const lines: string[] = [];
 
-        // ========== Port 80 redirect to HTTPS ==========
-        lines.push("server {");
-        lines.push("    listen 80;");
-        lines.push(`    server_name ${fqdn};`);
-        lines.push(`    location /.well-known/acme-challenge/ { root /var/www/acme; }`);
-        lines.push("    location / { return 301 https://$host$request_uri; }");
-        lines.push("}");
-        lines.push("");
-
         // ========== Port 443 HTTPS main server block ==========
         lines.push("server {");
         lines.push("    listen 443 ssl;");
@@ -180,6 +224,8 @@ export class NginxGenerator {
             lines.push("");
         }
 
+        // ========== client_max_body_size for large uploads ==========
+        lines.push("    client_max_body_size 0;");
         lines.push("}");
         return lines.join("\n");
     }
