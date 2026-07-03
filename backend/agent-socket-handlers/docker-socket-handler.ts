@@ -21,6 +21,8 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         const nginxManager = new NginxManager(server);
                         await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, stack.nginxPathPrefix);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
+                        // Notify frontend of cache update
+                        await server.sendInfo(socket);
                     } catch (e) {
                         log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);
                     }
@@ -50,6 +52,8 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         const nginxManager = new NginxManager(server);
                         await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, stack.nginxPathPrefix);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
+                        // Notify frontend of cache update
+                        await server.sendInfo(socket);
                     } catch (e) {
                         log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);
                     }
@@ -80,6 +84,8 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         const nginxManager = new NginxManager(server);
                         await nginxManager.deleteNginxConfig(name);
                         log.info("docker-socket-handler", `✅ Nginx config deleted for stack: ${name}`);
+                        // Notify frontend of cache update
+                        await server.sendInfo(socket);
                     } catch (e) {
                         log.warn("docker-socket-handler", `⚠️  Nginx deletion error (continuing): ${e.message}`);
                     }

@@ -69,24 +69,29 @@
             </div>
 
             <!-- Nginx Configuration Info -->
-            <div v-if="!isEditMode && !isAdd && nginxInfo" class="mb-3">
+            <div v-if="(isEditMode || isAdd || (!isEditMode && !isAdd && nginxInfo))" class="mb-3">
                 <div class="shadow-box big-padding">
                     <h5 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h5>
                     <div class="row">
-                        <div class="col-md-6">
-                            <small class="d-block text-muted mb-1">{{ $t("FQDN") || "FQDN" }}</small>
-                            <p class="mb-3">
-                                <code>{{ nginxInfo.fqdn }}</code>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
-                            <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
-                        </div>
+                        <!-- Display FQDN and Port (read-only) when stack exists -->
+                        <template v-if="!isAdd && nginxInfo">
+                            <div class="col-md-6">
+                                <small class="d-block text-muted mb-1">{{ $t("FQDN") || "FQDN" }}</small>
+                                <p class="mb-3">
+                                    <code>{{ nginxInfo.fqdn }}</code>
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
+                                <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
+                            </div>
+                        </template>
+                        <!-- Path Prefix (editable in create/edit mode, read-only in view mode) -->
                         <div class="col-12">
                             <small class="d-block text-muted mb-1">{{ $t("pathPrefix") || "Path Prefix" }}</small>
-                            <input v-if="isEditMode" v-model="stack.nginxPathPrefix" type="text" class="form-control" placeholder="/" />
+                            <input v-if="isEditMode || isAdd" v-model="stack.nginxPathPrefix" type="text" class="form-control" placeholder="/" />
                             <p v-else class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
+                            <small v-if="isEditMode || isAdd" class="form-text text-muted">Default: /</small>
                         </div>
                     </div>
                 </div>

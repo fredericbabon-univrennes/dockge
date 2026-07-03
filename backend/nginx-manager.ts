@@ -133,6 +133,15 @@ export class NginxManager {
                 log.warn("nginx-manager", `⏸️  Auto-restart disabled. To apply: systemctl restart nginx`);
             }
 
+            // ========== 8. UPDATE CACHE ==========
+            this.server.nginxConfigCache[stack.name] = {
+                stackName: stack.name,
+                port: stackInfo.port,
+                pathPrefix: stackInfo.pathPrefix,
+                fqdn: stackInfo.fqdn
+            };
+            log.info("nginx-manager", `📦 Cache updated for: ${stack.name}`);
+
         } catch (error: any) {
             log.error("nginx-manager", `❌ Error creating Nginx config: ${error.message}`);
             throw error;
@@ -187,6 +196,10 @@ export class NginxManager {
             } else {
                 log.warn("nginx-manager", `⏸️  Auto-restart disabled. To apply: systemctl restart nginx`);
             }
+
+            // ========== 5. UPDATE CACHE ==========
+            delete this.server.nginxConfigCache[stackName];
+            log.info("nginx-manager", `📦 Cache cleared for: ${stackName}`);
 
         } catch (error: any) {
             log.error("nginx-manager", `❌ Error deleting Nginx config: ${error.message}`);
