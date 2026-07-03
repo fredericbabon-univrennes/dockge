@@ -4,6 +4,7 @@
  */
 
 import { log } from "./log";
+import http from "http";
 import https from "https";
 
 export interface NginxGeneratedConfigs {
@@ -29,6 +30,7 @@ export class NginxGenerator {
 
     /**
      * Fetch public IP from Google Cloud metadata service
+     * Uses HTTP (not HTTPS) to avoid certificate verification issues
      */
     private getPublicIpFromGcp(): Promise<string> {
         return new Promise((resolve, reject) => {
@@ -42,7 +44,7 @@ export class NginxGenerator {
                 timeout: 3000
             };
 
-            https.request(options, (res) => {
+            http.request(options, (res) => {
                 let data = "";
                 res.on("data", chunk => data += chunk);
                 res.on("end", () => {
