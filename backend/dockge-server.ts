@@ -577,6 +577,23 @@ export class DockgeServer {
                 log.error("server", `❌ Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
             }
 
+            // Extract allowed IPs from dockge config if it exists
+            try {
+                const fs = await import("fs");
+                const path = await import("path");
+                const dockgePath = path.join(this.nginxConfigDir, "dockge");
+                if (fs.existsSync(dockgePath)) {
+                    const dockgeConfig = fs.readFileSync(dockgePath, "utf-8");
+                    const { extractAllowedIpsFromNginxConfig } = await import("./nginx-config-parser");
+                    this.nginxAllowedIps = extractAllowedIpsFromNginxConfig(dockgeConfig);
+                    log.info("server", `✅ Extracted allowed IPs from dockge config: [${this.nginxAllowedIps.join(", ")}]`);
+                } else {
+                    log.warn("server", `⚠️  Dockge config not found, using default allowed IP: 127.0.0.1`);
+                }
+            } catch (e) {
+                log.warn("server", `⚠️  Failed to extract allowed IPs: ${e instanceof Error ? e.message : String(e)}`);
+            }
+
             // Load public IP for FQDN generation (non-blocking)
             try {
                 const { NginxGenerator } = await import("./nginx-generator");

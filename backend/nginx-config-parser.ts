@@ -85,6 +85,31 @@ export function extractFqdnFromNginxConfig(configContent: string): string | null
     return null;
 }
 
+/**
+ * Extract allowed IPs from Nginx config content
+ * Looks for "allow <IP>" directives
+ */
+export function extractAllowedIpsFromNginxConfig(configContent: string): string[] {
+    try {
+        // Find all "allow X.X.X.X;" lines
+        const allowRegex = /allow\s+([0-9a-zA-Z.:]+)\s*;/g;
+        const ips: Set<string> = new Set();
+        let match;
+
+        while ((match = allowRegex.exec(configContent)) !== null) {
+            const ip = match[1].trim();
+            if (ip && ip !== "all") {
+                ips.add(ip);
+            }
+        }
+
+        return Array.from(ips);
+    } catch (e) {
+        // Ignore parse errors
+    }
+    return ["127.0.0.1"];  // Default fallback
+}
+
 export interface NginxStackConfig {
     stackName: string;
     port: number | null;
