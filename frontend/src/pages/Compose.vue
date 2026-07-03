@@ -74,13 +74,6 @@
                     <h5 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h5>
                     <div class="row">
                         <div class="col-md-6">
-                            <small class="d-block text-muted mb-1">{{ $t("preset") || "Preset" }}</small>
-                            <p class="mb-3">
-                                <span v-if="nginxInfo.presetName" class="badge bg-info">{{ nginxInfo.presetName }}</span>
-                                <span v-else class="badge bg-secondary">{{ $t("default") || "Default" }}</span>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
                             <small class="d-block text-muted mb-1">{{ $t("FQDN") || "FQDN" }}</small>
                             <p class="mb-3">
                                 <code>{{ nginxInfo.fqdn }}</code>
@@ -90,9 +83,10 @@
                             <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
                             <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <small class="d-block text-muted mb-1">{{ $t("pathPrefix") || "Path Prefix" }}</small>
-                            <p class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
+                            <input v-if="isEditMode" v-model="stack.nginxPathPrefix" type="text" class="form-control" placeholder="/" />
+                            <p v-else class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
                         </div>
                     </div>
                 </div>
@@ -365,7 +359,8 @@ export default {
             combinedTerminalRows: COMBINED_TERMINAL_ROWS,
             combinedTerminalCols: COMBINED_TERMINAL_COLS,
             stack: {
-
+                nginxPort: 8080,
+                nginxPathPrefix: "/",
             },
             serviceStatusList: {},
             dockerStats: {},
@@ -376,16 +371,6 @@ export default {
             newContainerName: "",
             stopServiceStatusTimeout: false,
             stopDockerStatsTimeout: false,
-            nginxPresets: {
-                jupyter: { port: 8890, pathPrefix: "/jupyter/", name: "Jupyter" },
-                vscode: { port: 8888, pathPrefix: "/vscode/", name: "VS Code" },
-                ollama: { port: 11434, pathPrefix: "/", name: "Ollama" },
-                "openwebui": { port: 3000, pathPrefix: "/open-webui/", name: "OpenWebUI" },
-                invokeai: { port: 9090, pathPrefix: "/", name: "InvokeAI" },
-                comfyui: { port: 8188, pathPrefix: "/", name: "ComfyUI" },
-                speaches: { port: 8020, pathPrefix: "/", name: "Speaches" },
-                dockge: { port: 5001, pathPrefix: "/", name: "Dockge" },
-            }
         };
     },
     computed: {
@@ -395,25 +380,27 @@ export default {
             }
 
             const stackName = this.stack.name.toLowerCase();
-            const preset = this.nginxPresets[stackName];
-            const domainSuffix = "sslip.io";
+            const domainSuffix = this.$root.info?.nginxDomainSuffix || "sslip.io";
             const fqdn = `${stackName}.${domainSuffix}`;
-            
-            if (preset) {
+
+            // Try to load from server's Nginx config cache first
+            const nginxConfigCache = this.$root.info?.nginxConfigCache || {};
+            const cachedConfig = nginxConfigCache[stackName];
+
+            if (cachedConfig) {
                 return {
-                    presetName: preset.name,
-                    fqdn: fqdn,
-                    port: preset.port,
-                    pathPrefix: preset.pathPrefix,
-                };
-            } else {
-                return {
-                    presetName: null,
-                    fqdn: fqdn,
-                    port: 8080,
-                    pathPrefix: "/",
+                    fqdn: cachedConfig.fqdn || fqdn,
+                    port: cachedConfig.port || 8080,
+                    pathPrefix: cachedConfig.pathPrefix || "/",
                 };
             }
+
+            // Fall back to stack properties if not in cache
+            return {
+                fqdn: fqdn,
+                port: this.stack.nginxPort || 8080,
+                pathPrefix: this.stack.nginxPathPrefix || "/",
+            };
         },
 
         endpointDisplay() {

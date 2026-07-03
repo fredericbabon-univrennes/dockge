@@ -27,6 +27,7 @@ export class Stack {
     protected _composeYAML?: string;
     protected _composeENV?: string;
     protected _nginxConfig?: string;
+    protected _nginxPathPrefix: string = "/";
     protected _configFilePath?: string;
     protected _composeFileName: string = "compose.yaml";
     protected server: DockgeServer;
@@ -162,6 +163,14 @@ export class Stack {
             }
         }
         return this._nginxConfig;
+    }
+
+    get nginxPathPrefix() : string {
+        return this._nginxPathPrefix;
+    }
+
+    set nginxPathPrefix(value: string) {
+        this._nginxPathPrefix = value || "/";
     }
 
     get path() : string {

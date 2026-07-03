@@ -19,7 +19,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                 if (server.generateNginxOnStackCreate) {
                     try {
                         const nginxManager = new NginxManager(server);
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, stack.nginxPathPrefix);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                     } catch (e) {
                         log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);
@@ -48,7 +48,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                 if (server.generateNginxOnStackCreate) {
                     try {
                         const nginxManager = new NginxManager(server);
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, stack.nginxPathPrefix);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                     } catch (e) {
                         log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);

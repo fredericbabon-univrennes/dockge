@@ -11,7 +11,7 @@ import { Stack } from "./stack";
 import { DockgeServer } from "./dockge-server";
 import { log } from "./log";
 import { NginxGenerator, NginxGeneratedConfigs } from "./nginx-generator";
-import { getPresetForService } from "./nginx-presets";
+import { getDefaultPathPrefix } from "./nginx-presets";
 
 export interface StackNginxInfo {
     name: string;
@@ -45,7 +45,8 @@ export class NginxManager {
             const stackInfo = this.prepareStackInfo(
                 stack.name,
                 customPort,
-                customPathPrefix
+                customPathPrefix,
+                stack.composeYAML
             );
 
             // ========== 2. GENERATE CONFIGS ==========
@@ -290,22 +291,20 @@ export class NginxManager {
     private prepareStackInfo(
         stackName: string,
         customPort?: number,
-        customPathPrefix?: string
+        customPathPrefix?: string,
+        composeYAML?: string
     ): StackNginxInfo {
-        // Use custom values if provided, otherwise try preset
-        let port = customPort || 8080;
-        let pathPrefix = customPathPrefix || "/";
-
-        const preset = getPresetForService(stackName);
-        if (preset && !customPort) {
-            port = preset.port;
-        }
-        if (preset && !customPathPrefix) {
-            pathPrefix = preset.pathPrefix;
-        }
+        const stackNameLower = stackName.toLowerCase();
+        
+        // Port priority: custom > compose-extracted > default
+        const composeParsedPort = this.extractPortFromComposeYAML(composeYAML);
+        const port = customPort || composeParsedPort || this.server.nginxDefaultPort;
+        
+        // Path prefix: custom > default
+        const pathPrefix = customPathPrefix || getDefaultPathPrefix();
 
         // Generate FQDN
-        const fqdn = `${stackName}.${this.server.nginxDomainSuffix}`;
+        const fqdn = `${stackNameLower}.${this.server.nginxDomainSuffix}`;
 
         return {
             name: stackName,
@@ -313,5 +312,50 @@ export class NginxManager {
             pathPrefix,
             fqdn
         };
+    }
+
+    /**
+     * Extract port from compose YAML content
+     * Handles formats like "8001:8000" (host:container) or just "8001"
+     */
+    private extractPortFromComposeYAML(composeYAML?: string): number | null {
+        if (!composeYAML) {
+            return null;
+        }
+
+        try {
+            const composeData = yaml.parse(composeYAML);
+            
+            if (!composeData.services) {
+                return null;
+            }
+
+            // Iterate through all services to find ports
+            for (const [serviceName, service] of Object.entries(composeData.services) as [string, any][]) {
+                if (service.ports && Array.isArray(service.ports)) {
+                    // Find the first exposed port
+                    for (const portSpec of service.ports) {
+                        if (typeof portSpec === 'string') {
+                            // Format: "8001:8000" or "8001"
+                            const parts = portSpec.split(':');
+                            const hostPort = parseInt(parts[0]);
+                            if (!isNaN(hostPort)) {
+                                log.debug("nginx-manager", `✅ Extracted port from compose YAML: ${hostPort} from "${portSpec}"`);
+                                return hostPort;
+                            }
+                        } else if (typeof portSpec === 'number') {
+                            log.debug("nginx-manager", `✅ Extracted port from compose YAML: ${portSpec}`);
+                            return portSpec;
+                        }
+                    }
+                }
+            }
+
+            log.debug("nginx-manager", `⚠️  No ports found in compose YAML, using default`);
+            return null;
+        } catch (e) {
+            log.warn("nginx-manager", `⚠️  Failed to extract port from compose YAML: ${e instanceof Error ? e.message : String(e)}. Using default.`);
+            return null;
+        }
     }
 }

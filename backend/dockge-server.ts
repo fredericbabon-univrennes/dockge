@@ -153,6 +153,11 @@ export class DockgeServer {
     nginxDefaultPort: number = 8080;
 
     /**
+     * Cache of existing Nginx configurations loaded from nginxConfigDir
+     */
+    nginxConfigCache: { [stackName: string]: any } = {};
+
+    /**
      * ========== END NGINX PROPERTIES ==========
      */
 
@@ -556,6 +561,16 @@ export class DockgeServer {
             process.exit(1);
         }
 
+        // Load existing Nginx configurations
+        if (this.generateNginxOnStackCreate) {
+            try {
+                const { loadExistingNginxConfigs } = await import("./nginx-config-loader");
+                this.nginxConfigCache = await loadExistingNginxConfigs(this.nginxConfigDir);
+            } catch (e) {
+                log.warn("server", `Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
         // First time setup if needed
         let jwtSecretBean = await R.findOne("setting", " `key` = ? ", [
             "jwtSecret",
@@ -633,6 +648,9 @@ export class DockgeServer {
             latestVersion: latestVersionProperty,
             isContainer,
             primaryHostname: await Settings.get("primaryHostname"),
+            nginxDomainSuffix: this.nginxDomainSuffix,
+            nginxEnabled: this.generateNginxOnStackCreate,
+            nginxConfigCache: this.nginxConfigCache,
             //serverTimezone: await this.getTimezone(),
             //serverTimezoneOffset: this.getTimezoneOffset(),
         });
