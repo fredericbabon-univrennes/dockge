@@ -98,6 +98,64 @@ export class DockgeServer {
      */
     statsRefreshInterval: NodeJS.Timer | null = null;
 
+    /**
+     * ========== NGINX CONFIGURATION PROPERTIES ==========
+     */
+
+    /**
+     * Enable automatic Nginx config generation on stack create/update
+     */
+    generateNginxOnStackCreate: boolean = true;
+
+    /**
+     * Automatically restart Nginx when configs are updated
+     */
+    nginxAutoRestart: boolean = false;
+
+    /**
+     * Nginx configuration directory (where configs are stored)
+     */
+    nginxConfigDir: string = "/etc/nginx/sites-available";
+
+    /**
+     * Nginx symlink directory (where symlinks are created)
+     */
+    nginxSymlinkDir: string = "/etc/nginx/sites-enabled";
+
+    /**
+     * ACME challenge directory (for Let's Encrypt)
+     */
+    nginxAcmeDir: string = "/var/www/acme";
+
+    /**
+     * SSL certificate path
+     */
+    nginxSslCert: string = "/etc/nginx/ssl/wildcard.crt";
+
+    /**
+     * SSL key path
+     */
+    nginxSslKey: string = "/etc/nginx/ssl/wildcard.key";
+
+    /**
+     * Domain suffix for generated FQDNs (e.g., "sslip.io", "example.com")
+     */
+    nginxDomainSuffix: string = "sslip.io";
+
+    /**
+     * List of IP addresses allowed to access services via Nginx
+     */
+    nginxAllowedIps: string[] = ["127.0.0.1"];
+
+    /**
+     * Default port if no preset is found
+     */
+    nginxDefaultPort: number = 8080;
+
+    /**
+     * ========== END NGINX PROPERTIES ==========
+     */
+
     jwtSecret : string = "";
 
     stacksDir : string = "";

@@ -68,6 +68,36 @@
                 </a>
             </div>
 
+            <!-- Nginx Configuration Info -->
+            <div v-if="!isEditMode && !isAdd && nginxInfo" class="mb-3">
+                <div class="shadow-box big-padding">
+                    <h5 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="d-block text-muted mb-1">{{ $t("preset") || "Preset" }}</small>
+                            <p class="mb-3">
+                                <span v-if="nginxInfo.presetName" class="badge bg-info">{{ nginxInfo.presetName }}</span>
+                                <span v-else class="badge bg-secondary">{{ $t("default") || "Default" }}</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="d-block text-muted mb-1">{{ $t("FQDN") || "FQDN" }}</small>
+                            <p class="mb-3">
+                                <code>{{ nginxInfo.fqdn }}</code>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
+                            <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="d-block text-muted mb-1">{{ $t("pathPrefix") || "Path Prefix" }}</small>
+                            <p class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Progress Terminal -->
             <transition name="slide-fade" appear>
                 <Terminal
@@ -346,9 +376,46 @@ export default {
             newContainerName: "",
             stopServiceStatusTimeout: false,
             stopDockerStatsTimeout: false,
+            nginxPresets: {
+                jupyter: { port: 8890, pathPrefix: "/jupyter/", name: "Jupyter" },
+                vscode: { port: 8888, pathPrefix: "/vscode/", name: "VS Code" },
+                ollama: { port: 11434, pathPrefix: "/", name: "Ollama" },
+                "openwebui": { port: 3000, pathPrefix: "/open-webui/", name: "OpenWebUI" },
+                invokeai: { port: 9090, pathPrefix: "/", name: "InvokeAI" },
+                comfyui: { port: 8188, pathPrefix: "/", name: "ComfyUI" },
+                speaches: { port: 8020, pathPrefix: "/", name: "Speaches" },
+                dockge: { port: 5001, pathPrefix: "/", name: "Dockge" },
+            }
         };
     },
     computed: {
+        nginxInfo() {
+            if (this.isAdd || !this.stack.name) {
+                return null;
+            }
+
+            const stackName = this.stack.name.toLowerCase();
+            const preset = this.nginxPresets[stackName];
+            const domainSuffix = "sslip.io";
+            const fqdn = `${stackName}.${domainSuffix}`;
+            
+            if (preset) {
+                return {
+                    presetName: preset.name,
+                    fqdn: fqdn,
+                    port: preset.port,
+                    pathPrefix: preset.pathPrefix,
+                };
+            } else {
+                return {
+                    presetName: null,
+                    fqdn: fqdn,
+                    port: 8080,
+                    pathPrefix: "/",
+                };
+            }
+        },
+
         endpointDisplay() {
             return this.$root.endpointDisplayFunction(this.endpoint);
         },

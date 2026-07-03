@@ -26,6 +26,7 @@ export class Stack {
     protected _status: number = UNKNOWN;
     protected _composeYAML?: string;
     protected _composeENV?: string;
+    protected _nginxConfig?: string;
     protected _configFilePath?: string;
     protected _composeFileName: string = "compose.yaml";
     protected server: DockgeServer;
@@ -150,6 +151,17 @@ export class Stack {
             }
         }
         return this._composeENV;
+    }
+
+    get nginxConfig() : string {
+        if (this._nginxConfig === undefined) {
+            try {
+                this._nginxConfig = fs.readFileSync(path.join(this.path, "nginx.conf"), "utf-8");
+            } catch (e) {
+                this._nginxConfig = "";
+            }
+        }
+        return this._nginxConfig;
     }
 
     get path() : string {

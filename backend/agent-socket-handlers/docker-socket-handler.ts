@@ -3,6 +3,8 @@ import { DockgeServer } from "../dockge-server";
 import { callbackError, callbackResult, checkLogin, DockgeSocket, ValidationError } from "../util-server";
 import { Stack } from "../stack";
 import { AgentSocket } from "../../common/agent-socket";
+import { NginxManager } from "../nginx-manager";
+import { log } from "../log";
 
 export class DockerSocketHandler extends AgentSocketHandler {
     create(socket : DockgeSocket, server : DockgeServer, agentSocket : AgentSocket) {
@@ -12,6 +14,18 @@ export class DockerSocketHandler extends AgentSocketHandler {
             try {
                 checkLogin(socket);
                 const stack = await this.saveStack(server, name, composeYAML, composeENV, isAdd);
+
+                // ✨ NGINX GENERATION
+                if (server.generateNginxOnStackCreate) {
+                    try {
+                        const nginxManager = new NginxManager(server);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd);
+                        log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
+                    } catch (e) {
+                        log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);
+                    }
+                }
+
                 await stack.deploy(socket);
                 server.sendStackList();
                 callbackResult({
@@ -28,7 +42,19 @@ export class DockerSocketHandler extends AgentSocketHandler {
         agentSocket.on("saveStack", async (name : unknown, composeYAML : unknown, composeENV : unknown, isAdd : unknown, callback) => {
             try {
                 checkLogin(socket);
-                await this.saveStack(server, name, composeYAML, composeENV, isAdd);
+                const stack = await this.saveStack(server, name, composeYAML, composeENV, isAdd);
+
+                // ✨ NGINX GENERATION
+                if (server.generateNginxOnStackCreate) {
+                    try {
+                        const nginxManager = new NginxManager(server);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd);
+                        log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
+                    } catch (e) {
+                        log.warn("docker-socket-handler", `⚠️  Nginx generation error (continuing): ${e.message}`);
+                    }
+                }
+
                 callbackResult({
                     ok: true,
                     msg: "Saved",
@@ -47,6 +73,17 @@ export class DockerSocketHandler extends AgentSocketHandler {
                     throw new ValidationError("Name must be a string");
                 }
                 const stack = await Stack.getStack(server, name);
+
+                // ✨ NGINX DELETION
+                if (server.generateNginxOnStackCreate) {
+                    try {
+                        const nginxManager = new NginxManager(server);
+                        await nginxManager.deleteNginxConfig(name);
+                        log.info("docker-socket-handler", `✅ Nginx config deleted for stack: ${name}`);
+                    } catch (e) {
+                        log.warn("docker-socket-handler", `⚠️  Nginx deletion error (continuing): ${e.message}`);
+                    }
+                }
 
                 try {
                     await stack.delete(socket);
