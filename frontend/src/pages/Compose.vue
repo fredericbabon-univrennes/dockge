@@ -64,7 +64,7 @@
             <!-- URLs -->
             <div v-if="urls.length > 0" class="mb-3">
                 <a v-for="(urlItem, index) in urls" :key="index" target="_blank" :href="urlItem.url">
-                    <span class="badge bg-secondary me-2">{{ urlItem.display }}</span>
+                    <span class="badge bg-secondary me-2" style="font-size: 1em;">👉 Click to open: {{ urlItem.display }} 🌐</span>
                 </a>
             </div>
 
@@ -92,6 +92,33 @@
                             <input v-if="isEditMode || isAdd" v-model="stack.nginxPathPrefix" type="text" class="form-control" placeholder="/" />
                             <p v-else class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
                             <small v-if="isEditMode || isAdd" class="form-text text-muted">Default: /</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deployment Options (GPU, Network) -->
+            <div v-if="isEditMode || isAdd" class="mb-3">
+                <div class="shadow-box big-padding">
+                    <h5 class="mb-3">⚙️ Deployment Options</h5>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="form-check mb-2">
+                                <input v-model="stack.enableGpu" type="checkbox" class="form-check-input" id="enableGpu" />
+                                <label class="form-check-label" for="enableGpu">
+                                    🎮 Enable GPU Support (NVIDIA)
+                                </label>
+                                <small class="d-block text-muted">Adds GPU reservation with count: 1 and nvidia driver</small>
+                            </div>
+                        </div>
+                        <div v-if="firstNetworkName" class="col-12">
+                            <div class="form-check">
+                                <input v-model="stack.enableBridgeNetwork" type="checkbox" class="form-check-input" id="enableBridgeNetwork" />
+                                <label class="form-check-label" for="enableBridgeNetwork">
+                                    🌉 Use Bridge Driver for "{{ firstNetworkName }}"
+                                </label>
+                                <small class="d-block text-muted">Adds driver: bridge to network "{{ firstNetworkName }}"</small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -304,6 +331,16 @@ version: '3.8'
 services:
   # Add your services here
 `;
+const gpuDeploymentBlock = `    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities:
+                - gpu
+`;
+// Bridge driver is added to existing networks, no standalone block needed
 const envDefault = "# VARIABLE=value #comment";
 
 let yamlErrorTimeout = null;
@@ -364,6 +401,8 @@ export default {
             stack: {
                 nginxPort: 8080,
                 nginxPathPrefix: "/",
+                enableGpu: false,
+                enableBridgeNetwork: false,
             },
             serviceStatusList: {},
             dockerStats: {},
@@ -475,6 +514,14 @@ export default {
             return this.jsonConfig.networks;
         },
 
+        firstNetworkName() {
+            if (this.networks && typeof this.networks === 'object') {
+                const names = Object.keys(this.networks);
+                return names.length > 0 ? names[0] : null;
+            }
+            return null;
+        },
+
         endpoint() {
             return this.stack.endpoint || this.$route.params.endpoint || "";
         },
@@ -506,6 +553,14 @@ export default {
                 }
             },
             deep: true,
+        },
+
+        "stack.enableGpu"(newVal) {
+            this.updateDeploymentOptions();
+        },
+
+        "stack.enableBridgeNetwork"(newVal) {
+            this.updateDeploymentOptions();
         },
 
         jsonConfig: {
@@ -649,6 +704,45 @@ export default {
 
         bindTerminal() {
             this.$refs.progressTerminal?.bind(this.endpoint, this.terminalName);
+        },
+
+        updateDeploymentOptions() {
+            // This method updates the YAML in real-time when checkboxes change
+            let yaml = this.stack.composeYAML;
+
+            // Remove existing GPU blocks
+            yaml = yaml.replace(/\s+deploy:\s*\n\s+resources:\s*\n\s+reservations:\s*\n\s+devices:\s*\n\s+-\s+driver:\s+nvidia[\s\S]*?capabilities:[\s\S]*?-\s+gpu\s*/g, "");
+
+            // Remove any existing "driver: bridge" directives from networks
+            yaml = yaml.replace(/(\s+\w+:\s*)(\n\s+driver:\s+bridge)/g, "$1");
+
+            // Add GPU block if enabled
+            if (this.stack.enableGpu && !yaml.includes("nvidia")) {
+                // Find first service and inject deploy block
+                const servicesMatch = yaml.match(/services:\s*\n(\s+\w+:)/);
+                if (servicesMatch) {
+                    const serviceStart = yaml.indexOf(servicesMatch[0]) + servicesMatch[0].length;
+                    const nextNewline = yaml.indexOf("\n", serviceStart);
+                    const afterFirstService = yaml.indexOf("\n", nextNewline + 1);
+                    if (afterFirstService !== -1) {
+                        yaml = yaml.slice(0, afterFirstService) + "\n" + gpuDeploymentBlock + yaml.slice(afterFirstService);
+                    }
+                }
+            }
+
+            // Add bridge driver to existing network if enabled and network exists
+            if (this.stack.enableBridgeNetwork && this.firstNetworkName && !yaml.includes("driver: bridge")) {
+                // Find the network in YAML and capture its indentation to add driver: bridge correctly
+                const networkRegex = new RegExp(`(networks:\\s*\n)(\\s+)(${this.firstNetworkName}:)(\\n|$)`, "m");
+                const networkMatch = yaml.match(networkRegex);
+                if (networkMatch) {
+                    // Add driver: bridge with proper indentation (same as network + 2 spaces)
+                    yaml = yaml.replace(networkRegex, `$1$2$3\n$2  driver: bridge$4`);
+                }
+            }
+
+            // Update YAML (this will trigger yamlCodeChange if editorFocus is true)
+            this.stack.composeYAML = yaml;
         },
 
         loadStack() {

@@ -9,9 +9,7 @@
                 <div v-if="!isEditMode">
                     <span class="badge me-1" :class="bgStyle">{{ status }}</span>
 
-                    <a v-for="port in (ports ?? envsubstService.ports)" :key="port" :href="parsePort(port).url" target="_blank">
-                        <span class="badge me-1 bg-secondary">{{ parsePort(port).display }}</span>
-                    </a>
+                    <span v-for="port in (ports ?? envsubstService.ports)" :key="port" class="badge me-1 bg-secondary">{{ parsePort(port).display }}</span>
                 </div>
             </div>
             <div class="col-7">
