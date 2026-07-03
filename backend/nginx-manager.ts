@@ -7,6 +7,7 @@
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import yaml from "yaml";
 import { Stack } from "./stack";
 import { DockgeServer } from "./dockge-server";
 import { log } from "./log";
@@ -296,15 +297,23 @@ export class NginxManager {
     ): StackNginxInfo {
         const stackNameLower = stackName.toLowerCase();
         
+        log.debug("nginx-manager", `📊 Preparing stack info for: ${stackName}`);
+        log.debug("nginx-manager", `   customPort=${customPort}, customPathPrefix=${customPathPrefix}, hasCompose=${!!composeYAML}`);
+        
         // Port priority: custom > compose-extracted > default
         const composeParsedPort = this.extractPortFromComposeYAML(composeYAML);
+        log.debug("nginx-manager", `   Port priority: custom=${customPort} > compose=${composeParsedPort} > default=${this.server.nginxDefaultPort}`);
+        
         const port = customPort || composeParsedPort || this.server.nginxDefaultPort;
+        log.debug("nginx-manager", `   ✅ Final port: ${port}`);
         
         // Path prefix: custom > default
         const pathPrefix = customPathPrefix || getDefaultPathPrefix();
+        log.debug("nginx-manager", `   ✅ Final pathPrefix: ${pathPrefix}`);
 
         // Generate FQDN
         const fqdn = `${stackNameLower}.${this.server.nginxDomainSuffix}`;
+        log.debug("nginx-manager", `   ✅ FQDN: ${fqdn}`);
 
         return {
             name: stackName,
@@ -320,41 +329,54 @@ export class NginxManager {
      */
     private extractPortFromComposeYAML(composeYAML?: string): number | null {
         if (!composeYAML) {
+            log.debug("nginx-manager", `📭 No compose YAML provided`);
             return null;
         }
 
         try {
+            log.debug("nginx-manager", `📋 Parsing compose YAML (${composeYAML.length} chars)...`);
             const composeData = yaml.parse(composeYAML);
             
             if (!composeData.services) {
+                log.warn("nginx-manager", `⚠️  No 'services' key in compose YAML`);
                 return null;
             }
 
+            log.debug("nginx-manager", `📦 Found services: [${Object.keys(composeData.services).join(", ")}]`);
+
             // Iterate through all services to find ports
             for (const [serviceName, service] of Object.entries(composeData.services) as [string, any][]) {
+                log.debug("nginx-manager", `   Checking service: ${serviceName}`);
+                
                 if (service.ports && Array.isArray(service.ports)) {
+                    log.debug("nginx-manager", `   Found ${service.ports.length} port(s)`);
+                    
                     // Find the first exposed port
                     for (const portSpec of service.ports) {
+                        log.debug("nginx-manager", `     Port spec: ${JSON.stringify(portSpec)} (type: ${typeof portSpec})`);
+                        
                         if (typeof portSpec === 'string') {
                             // Format: "8001:8000" or "8001"
                             const parts = portSpec.split(':');
                             const hostPort = parseInt(parts[0]);
                             if (!isNaN(hostPort)) {
-                                log.debug("nginx-manager", `✅ Extracted port from compose YAML: ${hostPort} from "${portSpec}"`);
+                                log.info("nginx-manager", `✅ Extracted port from compose: ${hostPort} from "${portSpec}"`);
                                 return hostPort;
                             }
                         } else if (typeof portSpec === 'number') {
-                            log.debug("nginx-manager", `✅ Extracted port from compose YAML: ${portSpec}`);
+                            log.info("nginx-manager", `✅ Extracted port from compose: ${portSpec}`);
                             return portSpec;
                         }
                     }
+                } else {
+                    log.debug("nginx-manager", `   No ports in service ${serviceName}`);
                 }
             }
 
-            log.debug("nginx-manager", `⚠️  No ports found in compose YAML, using default`);
+            log.warn("nginx-manager", `⚠️  No ports found in any service, using default`);
             return null;
         } catch (e) {
-            log.warn("nginx-manager", `⚠️  Failed to extract port from compose YAML: ${e instanceof Error ? e.message : String(e)}. Using default.`);
+            log.error("nginx-manager", `❌ YAML parse error: ${e instanceof Error ? e.message : String(e)}`);
             return null;
         }
     }

@@ -958,11 +958,11 @@ export class DockgeServer {
         try {
             // Get all managed stacks
             const stacks = await Stack.getStackList(this);
-            log.info("server", "🔍 getContainerToStackMapping: Found " + stacks.size + " stacks");
+            // log.info("server", "🔍 getContainerToStackMapping: Found " + stacks.size + " stacks");
             
             for (const [stackName, stack] of stacks) {
                 try {
-                    log.info("server", `  📚 Stack "${stackName}": reading compose...`);
+                    // log.info("server", `  📚 Stack "${stackName}": reading compose...`);
                     
                     // Get the compose YAML
                     const composeYAML = stack.composeYAML;
@@ -978,14 +978,14 @@ export class DockgeServer {
                         continue;
                     }
 
-                    log.info("server", `    ✓ Services: ${Object.keys(parsed.services).join(", ")}`);
+                    // log.info("server", `    ✓ Services: ${Object.keys(parsed.services).join(", ")}`);
 
                     // Check each service for container_name
                     for (const serviceName in parsed.services) {
                         const service = parsed.services[serviceName];
                         if (service.container_name) {
                             mapping.set(service.container_name, stackName);
-                            log.info("server", `      ✓ Map "${service.container_name}" → stack "${stackName}"`);
+                            //log.info("server", `      ✓ Map "${service.container_name}" → stack "${stackName}"`);
                         }
                     }
                 } catch (e) {
@@ -993,7 +993,7 @@ export class DockgeServer {
                 }
             }
 
-            log.info("server", "✅ Final mapping: " + JSON.stringify(Object.fromEntries(mapping)));
+            //log.info("server", "✅ Final mapping: " + JSON.stringify(Object.fromEntries(mapping)));
             return mapping;
         } catch (e) {
             log.error("server", "❌ Failed to get container to stack mapping: " + (e as Error).message);
