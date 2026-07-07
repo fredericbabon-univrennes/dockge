@@ -381,19 +381,89 @@ export default defineComponent({
             //this.showConfig = true;
         }
     },
-    watch: {
+        watch: {
         "service.enableGpu"(newVal) {
             if (newVal) {
-                this.addGpuDeployment();
+                this.service.deploy = this.service.deploy || {};
+                this.service.deploy.resources = this.service.deploy.resources || {};
+                this.service.deploy.resources.reservations = this.service.deploy.resources.reservations || {};
+                this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices || [];
+                
+                const nvidiaExists = this.service.deploy.resources.reservations.devices.some(d => d.driver === 'nvidia');
+                if (!nvidiaExists) {
+                    this.service.deploy.resources.reservations.devices.push({
+                        driver: 'nvidia',
+                        count: 1,
+                        capabilities: ['gpu']
+                    });
+                }
             } else {
-                this.removeGpuDeployment();
+                if (this.service.deploy?.resources?.reservations?.devices) {
+                    this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices.filter(d => d.driver !== 'nvidia');
+                    
+                    if (this.service.deploy.resources.reservations.devices.length === 0) {
+                        delete this.service.deploy.resources.reservations.devices;
+                    }
+                    if (Object.keys(this.service.deploy.resources.reservations).length === 0) {
+                        delete this.service.deploy.resources.reservations;
+                    }
+                    if (Object.keys(this.service.deploy.resources).length === 0) {
+                        delete this.service.deploy.resources;
+                    }
+                    if (Object.keys(this.service.deploy).length === 0) {
+                        delete this.service.deploy;
+                    }
+                }
             }
         },
         "service.enableBridgeNetwork"(newVal) {
             if (newVal) {
-                this.addBridgeDriver();
+                // Get networks of this service
+                let networks = this.service.networks;
+                let networkNames = [];
+                
+                if (typeof networks === 'string') {
+                    networkNames = [networks];
+                } else if (Array.isArray(networks)) {
+                    networkNames = networks;
+                } else if (typeof networks === 'object' && networks !== null) {
+                    networkNames = Object.keys(networks);
+                }
+                
+                if (networkNames.length === 0) {
+                    return;
+                }
+                
+                // Update global networks
+                if (!this.jsonObject.networks) {
+                    this.jsonObject.networks = {};
+                }
+                
+                for (const networkName of networkNames) {
+                    if (!this.jsonObject.networks[networkName]) {
+                        this.jsonObject.networks[networkName] = {};
+                    }
+                    this.jsonObject.networks[networkName].driver = 'bridge';
+                }
             } else {
-                this.removeBridgeDriver();
+                // Get networks of this service
+                let networks = this.service.networks;
+                let networkNames = [];
+                
+                if (typeof networks === 'string') {
+                    networkNames = [networks];
+                } else if (Array.isArray(networks)) {
+                    networkNames = networks;
+                } else if (typeof networks === 'object' && networks !== null) {
+                    networkNames = Object.keys(networks);
+                }
+                
+                // Update global networks
+                for (const networkName of networkNames) {
+                    if (this.jsonObject.networks?.[networkName]) {
+                        delete this.jsonObject.networks[networkName].driver;
+                    }
+                }
             }
         }
     },
@@ -417,103 +487,6 @@ export default defineComponent({
         },
         restartService() {
             this.$emit("restart-service", this.name);
-        },
-
-        addGpuDeployment() {
-            if (!this.service.deploy) {
-                this.service.deploy = {};
-            }
-            if (!this.service.deploy.resources) {
-                this.service.deploy.resources = {};
-            }
-            if (!this.service.deploy.resources.reservations) {
-                this.service.deploy.resources.reservations = {};
-            }
-            if (!this.service.deploy.resources.reservations.devices) {
-                this.service.deploy.resources.reservations.devices = [];
-            }
-            
-            // Check if nvidia device already exists
-            const nvidiaExists = this.service.deploy.resources.reservations.devices.some(d => d.driver === 'nvidia');
-            if (!nvidiaExists) {
-                this.service.deploy.resources.reservations.devices.push({
-                    driver: 'nvidia',
-                    count: 1,
-                    capabilities: ['gpu']
-                });
-            }
-        },
-
-        removeGpuDeployment() {
-            if (this.service.deploy?.resources?.reservations?.devices) {
-                this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices.filter(d => d.driver !== 'nvidia');
-                
-                // Clean up empty structures
-                if (this.service.deploy.resources.reservations.devices.length === 0) {
-                    delete this.service.deploy.resources.reservations.devices;
-                }
-                if (Object.keys(this.service.deploy.resources.reservations).length === 0) {
-                    delete this.service.deploy.resources.reservations;
-                }
-                if (Object.keys(this.service.deploy.resources).length === 0) {
-                    delete this.service.deploy.resources;
-                }
-                if (Object.keys(this.service.deploy).length === 0) {
-                    delete this.service.deploy;
-                }
-            }
-        },
-
-        addBridgeDriver() {
-            // Get networks of this service
-            let networks = this.service.networks;
-            let networkNames = [];
-            
-            if (typeof networks === 'string') {
-                networkNames = [networks];
-            } else if (Array.isArray(networks)) {
-                networkNames = networks;
-            } else if (typeof networks === 'object' && networks !== null) {
-                networkNames = Object.keys(networks);
-            }
-            
-            // If no networks defined, nothing to do
-            if (networkNames.length === 0) {
-                return;
-            }
-            
-            // Update global networks
-            if (!this.jsonObject.networks) {
-                this.jsonObject.networks = {};
-            }
-            
-            for (const networkName of networkNames) {
-                if (!this.jsonObject.networks[networkName]) {
-                    this.jsonObject.networks[networkName] = {};
-                }
-                this.jsonObject.networks[networkName].driver = 'bridge';
-            }
-        },
-
-        removeBridgeDriver() {
-            // Get networks of this service
-            let networks = this.service.networks;
-            let networkNames = [];
-            
-            if (typeof networks === 'string') {
-                networkNames = [networks];
-            } else if (Array.isArray(networks)) {
-                networkNames = networks;
-            } else if (typeof networks === 'object' && networks !== null) {
-                networkNames = Object.keys(networks);
-            }
-            
-            // Update global networks
-            for (const networkName of networkNames) {
-                if (this.jsonObject.networks?.[networkName]) {
-                    delete this.jsonObject.networks[networkName].driver;
-                }
-            }
         }
     }
 });
