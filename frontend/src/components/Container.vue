@@ -101,15 +101,16 @@
                     <div class="row">
                         <div class="col-12">
                             <div class="form-check mb-2">
-                                <input v-model="service.enableGpu" type="checkbox" class="form-check-input" :id="'enableGpu_' + name" />
+                                <input v-model="enableGpu" type="checkbox" class="form-check-input" :id="'enableGpu_' + name" />
                                 <label class="form-check-label" :for="'enableGpu_' + name">
                                     🎮 Enable GPU Support (NVIDIA)
                                 </label>
                             </div>
                         </div>
+
                         <div class="col-12">
                             <div class="form-check">
-                                <input v-model="service.enableBridgeNetwork" type="checkbox" class="form-check-input" :id="'enableBridgeNetwork_' + name" />
+                                <input v-model="enableBridgeNetwork" type="checkbox" class="form-check-input" :id="'enableBridgeNetwork_' + name" />
                                 <label class="form-check-label" :for="'enableBridgeNetwork_' + name">
                                     🌉 Use Bridge Driver
                                 </label>
@@ -374,99 +375,110 @@ export default defineComponent({
                 return "N/A";
             }
             return this.serviceStatus[0].status;
+        },
+        enableGpu: {
+            get() {
+                // La case est cochée si le driver nvidia est présent dans les devices de deploy
+                const devices = this.service.deploy?.resources?.reservations?.devices;
+                if (!devices) return false;
+                return devices.some(d => d.driver === 'nvidia');
+            },
+            set(newVal) {
+                if (newVal) {
+                    this.service.deploy = this.service.deploy || {};
+                    this.service.deploy.resources = this.service.deploy.resources || {};
+                    this.service.deploy.resources.reservations = this.service.deploy.resources.reservations || {};
+                    this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices || [];
+                    
+                    const nvidiaExists = this.service.deploy.resources.reservations.devices.some(d => d.driver === 'nvidia');
+                    if (!nvidiaExists) {
+                        this.service.deploy.resources.reservations.devices.push({
+                            driver: 'nvidia',
+                            count: 1,
+                            capabilities: ['gpu']
+                        });
+                    }
+                } else {
+                    if (this.service.deploy?.resources?.reservations?.devices) {
+                        this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices.filter(d => d.driver !== 'nvidia');
+                        
+                        // Nettoyage des objets vides
+                        if (this.service.deploy.resources.reservations.devices.length === 0) {
+                            delete this.service.deploy.resources.reservations.devices;
+                        }
+                        if (Object.keys(this.service.deploy.resources.reservations).length === 0) {
+                            delete this.service.deploy.resources.reservations;
+                        }
+                        if (Object.keys(this.service.deploy.resources).length === 0) {
+                            delete this.service.deploy.resources;
+                        }
+                        if (Object.keys(this.service.deploy).length === 0) {
+                            delete this.service.deploy;
+                        }
+                    }
+                }
+            }
+        },
+
+        enableBridgeNetwork: {
+            get() {
+                // Récupère les réseaux de ce service
+                let networks = this.service.networks;
+                let networkNames = [];
+                
+                if (typeof networks === 'string') {
+                    networkNames = [networks];
+                } else if (Array.isArray(networks)) {
+                    networkNames = networks;
+                } else if (typeof networks === 'object' && networks !== null) {
+                    networkNames = Object.keys(networks);
+                }
+                
+                if (networkNames.length === 0) return false;
+                
+                // La case est cochée si TOUS les réseaux associés à ce service utilisent le driver bridge
+                return networkNames.every(networkName => this.jsonObject.networks?.[networkName]?.driver === 'bridge');
+            },
+            set(newVal) {
+                let networks = this.service.networks;
+                let networkNames = [];
+                
+                if (typeof networks === 'string') {
+                    networkNames = [networks];
+                } else if (Array.isArray(networks)) {
+                    networkNames = networks;
+                } else if (typeof networks === 'object' && networks !== null) {
+                    networkNames = Object.keys(networks);
+                }
+                
+                if (networkNames.length === 0) return;
+                
+                if (newVal) {
+                    if (!this.jsonObject.networks) {
+                        this.jsonObject.networks = {};
+                    }
+                    
+                    for (const networkName of networkNames) {
+                        if (!this.jsonObject.networks[networkName]) {
+                            this.jsonObject.networks[networkName] = {};
+                        }
+                        this.jsonObject.networks[networkName].driver = 'bridge';
+                    }
+                } else {
+                    for (const networkName of networkNames) {
+                        if (this.jsonObject.networks?.[networkName]) {
+                            delete this.jsonObject.networks[networkName].driver;
+                        }
+                    }
+                }
+            }
         }
     },
     mounted() {
         if (this.first) {
             //this.showConfig = true;
         }
-    },
-        watch: {
-        "service.enableGpu"(newVal) {
-            if (newVal) {
-                this.service.deploy = this.service.deploy || {};
-                this.service.deploy.resources = this.service.deploy.resources || {};
-                this.service.deploy.resources.reservations = this.service.deploy.resources.reservations || {};
-                this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices || [];
-                
-                const nvidiaExists = this.service.deploy.resources.reservations.devices.some(d => d.driver === 'nvidia');
-                if (!nvidiaExists) {
-                    this.service.deploy.resources.reservations.devices.push({
-                        driver: 'nvidia',
-                        count: 1,
-                        capabilities: ['gpu']
-                    });
-                }
-            } else {
-                if (this.service.deploy?.resources?.reservations?.devices) {
-                    this.service.deploy.resources.reservations.devices = this.service.deploy.resources.reservations.devices.filter(d => d.driver !== 'nvidia');
-                    
-                    if (this.service.deploy.resources.reservations.devices.length === 0) {
-                        delete this.service.deploy.resources.reservations.devices;
-                    }
-                    if (Object.keys(this.service.deploy.resources.reservations).length === 0) {
-                        delete this.service.deploy.resources.reservations;
-                    }
-                    if (Object.keys(this.service.deploy.resources).length === 0) {
-                        delete this.service.deploy.resources;
-                    }
-                    if (Object.keys(this.service.deploy).length === 0) {
-                        delete this.service.deploy;
-                    }
-                }
-            }
-        },
-        "service.enableBridgeNetwork"(newVal) {
-            if (newVal) {
-                // Get networks of this service
-                let networks = this.service.networks;
-                let networkNames = [];
-                
-                if (typeof networks === 'string') {
-                    networkNames = [networks];
-                } else if (Array.isArray(networks)) {
-                    networkNames = networks;
-                } else if (typeof networks === 'object' && networks !== null) {
-                    networkNames = Object.keys(networks);
-                }
-                
-                if (networkNames.length === 0) {
-                    return;
-                }
-                
-                // Update global networks
-                if (!this.jsonObject.networks) {
-                    this.jsonObject.networks = {};
-                }
-                
-                for (const networkName of networkNames) {
-                    if (!this.jsonObject.networks[networkName]) {
-                        this.jsonObject.networks[networkName] = {};
-                    }
-                    this.jsonObject.networks[networkName].driver = 'bridge';
-                }
-            } else {
-                // Get networks of this service
-                let networks = this.service.networks;
-                let networkNames = [];
-                
-                if (typeof networks === 'string') {
-                    networkNames = [networks];
-                } else if (Array.isArray(networks)) {
-                    networkNames = networks;
-                } else if (typeof networks === 'object' && networks !== null) {
-                    networkNames = Object.keys(networks);
-                }
-                
-                // Update global networks
-                for (const networkName of networkNames) {
-                    if (this.jsonObject.networks?.[networkName]) {
-                        delete this.jsonObject.networks[networkName].driver;
-                    }
-                }
-            }
-        }
-    },
+    },    
     methods: {
         parsePort(port) {
             if (this.stack.endpoint) {
