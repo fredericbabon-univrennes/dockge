@@ -193,10 +193,7 @@ export class NginxGenerator {
         }
 
         // ========== IP access control ==========
-        for (const ip of allowedIps) {
-            lines.push(`        allow ${ip};`);
-        }
-        lines.push("        deny all;");
+        lines.push("        include /etc/nginx/allowed_ips.conf;");
         lines.push("    }");
         lines.push("");
 
@@ -217,11 +214,7 @@ export class NginxGenerator {
                 lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
             }
 
-            for (const ip of allowedIps) {
-                lines.push(`        allow ${ip};`);
-            }
-
-            lines.push("        deny all;");
+            lines.push("        include /etc/nginx/allowed_ips.conf;");
             lines.push("    }");
             lines.push("");
         }
