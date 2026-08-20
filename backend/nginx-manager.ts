@@ -12,7 +12,7 @@ import { Stack } from "./stack";
 import { DockgeServer } from "./dockge-server";
 import { log } from "./log";
 import { NginxGenerator, NginxGeneratedConfigs } from "./nginx-generator";
-import { getDefaultPathPrefix } from "./nginx-config-parser";
+import { getDefaultPathPrefix, extractPathPrefixFromNginxConfig } from "./nginx-config-parser";
 
 export interface StackNginxInfo {
     name: string;
@@ -323,8 +323,13 @@ export class NginxManager {
         const port = customPort || composeParsedPort || this.server.nginxDefaultPort;
         log.debug("nginx-manager", `   ✅ Final port: ${port}`);
         
-        // Path prefix: custom > default
-        const pathPrefix = customPathPrefix || getDefaultPathPrefix();
+        // Path prefix priority: custom > existing nginx config > default
+        let pathPrefix = customPathPrefix;
+        if (!pathPrefix) {
+            // Try to load existing Nginx config to preserve path prefix
+            const existingPathPrefix = this.loadExistingPathPrefix(stackName);
+            pathPrefix = existingPathPrefix || getDefaultPathPrefix();
+        }
         log.debug("nginx-manager", `   ✅ Final pathPrefix: ${pathPrefix}`);
 
         // Generate FQDN with IP-dashed format if public IP is available
@@ -346,6 +351,42 @@ export class NginxManager {
             pathPrefix,
             fqdn
         };
+    }
+
+    /**
+     * Load existing path prefix from Nginx config to preserve it during updates
+     * Tries production config first, then local backup
+     */
+    private loadExistingPathPrefix(stackName: string): string | null {
+        try {
+            // Try to load from production config first
+            const prodConfigPath = path.join(this.server.nginxConfigDir, stackName);
+            if (fs.existsSync(prodConfigPath)) {
+                const configContent = fs.readFileSync(prodConfigPath, "utf-8");
+                const extractedPrefix = extractPathPrefixFromNginxConfig(configContent);
+                if (extractedPrefix && extractedPrefix !== "/") {
+                    log.debug("nginx-manager", `   📖 Loaded existing path prefix from production config: ${extractedPrefix}`);
+                    return extractedPrefix;
+                }
+            }
+
+            // Fallback: Try local backup
+            const stackDir = path.join(this.server.stacksDir, stackName);
+            const localConfigPath = path.join(stackDir, "nginx.conf");
+            if (fs.existsSync(localConfigPath)) {
+                const configContent = fs.readFileSync(localConfigPath, "utf-8");
+                const extractedPrefix = extractPathPrefixFromNginxConfig(configContent);
+                if (extractedPrefix && extractedPrefix !== "/") {
+                    log.debug("nginx-manager", `   📖 Loaded existing path prefix from local backup: ${extractedPrefix}`);
+                    return extractedPrefix;
+                }
+            }
+
+            return null;
+        } catch (e) {
+            log.warn("nginx-manager", `⚠️  Failed to load existing path prefix: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
     }
 
     /**
