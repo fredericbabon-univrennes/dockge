@@ -41,6 +41,7 @@ export class NginxManager {
     ): Promise<void> {
         try {
             log.info("nginx-manager", `🔧 Processing Nginx for stack: ${stack.name}`);
+            log.info("nginx-manager", `   isAdd=${isAdd}, customPort=${customPort}, customPathPrefix=${customPathPrefix}`);
 
             // ========== 1. PREPARE STACK INFO ==========
             const stackInfo = this.prepareStackInfo(
@@ -49,6 +50,7 @@ export class NginxManager {
                 customPathPrefix,
                 stack.composeYAML
             );
+            log.info("nginx-manager", `   🎯 Stack Info: port=${stackInfo.port}, pathPrefix=${stackInfo.pathPrefix}, fqdn=${stackInfo.fqdn}`);
 
             // ========== 2. GENERATE CONFIGS ==========
             const nginxConfigs = this.generator.generateConfigs(
@@ -359,32 +361,53 @@ export class NginxManager {
      */
     private loadExistingPathPrefix(stackName: string): string | null {
         try {
+            log.info("nginx-manager", `   🔍 Attempting to load existing path prefix for: ${stackName}`);
+            
             // Try to load from production config first
             const prodConfigPath = path.join(this.server.nginxConfigDir, stackName);
+            log.debug("nginx-manager", `   Checking production config: ${prodConfigPath}`);
+            
             if (fs.existsSync(prodConfigPath)) {
+                log.info("nginx-manager", `   ✅ Production config found, reading...`);
                 const configContent = fs.readFileSync(prodConfigPath, "utf-8");
                 const extractedPrefix = extractPathPrefixFromNginxConfig(configContent);
+                log.info("nginx-manager", `   📖 Extracted prefix from production config: "${extractedPrefix}"`);
+                
                 if (extractedPrefix && extractedPrefix !== "/") {
-                    log.debug("nginx-manager", `   📖 Loaded existing path prefix from production config: ${extractedPrefix}`);
+                    log.info("nginx-manager", `   ✅ Using preserved path prefix: ${extractedPrefix}`);
                     return extractedPrefix;
+                } else {
+                    log.warn("nginx-manager", `   ⚠️  Extracted prefix is "/" or empty, will use default`);
                 }
+            } else {
+                log.warn("nginx-manager", `   ⚠️  Production config NOT found: ${prodConfigPath}`);
             }
 
             // Fallback: Try local backup
             const stackDir = path.join(this.server.stacksDir, stackName);
             const localConfigPath = path.join(stackDir, "nginx.conf");
+            log.debug("nginx-manager", `   Checking local backup: ${localConfigPath}`);
+            
             if (fs.existsSync(localConfigPath)) {
+                log.info("nginx-manager", `   ✅ Local backup found, reading...`);
                 const configContent = fs.readFileSync(localConfigPath, "utf-8");
                 const extractedPrefix = extractPathPrefixFromNginxConfig(configContent);
+                log.info("nginx-manager", `   📖 Extracted prefix from local backup: "${extractedPrefix}"`);
+                
                 if (extractedPrefix && extractedPrefix !== "/") {
-                    log.debug("nginx-manager", `   📖 Loaded existing path prefix from local backup: ${extractedPrefix}`);
+                    log.info("nginx-manager", `   ✅ Using preserved path prefix from backup: ${extractedPrefix}`);
                     return extractedPrefix;
+                } else {
+                    log.warn("nginx-manager", `   ⚠️  Extracted prefix is "/" or empty, will use default`);
                 }
+            } else {
+                log.warn("nginx-manager", `   ⚠️  Local backup NOT found: ${localConfigPath}`);
             }
 
+            log.warn("nginx-manager", `   ⚠️  No existing path prefix found, will use default "/"`)
             return null;
         } catch (e) {
-            log.warn("nginx-manager", `⚠️  Failed to load existing path prefix: ${e instanceof Error ? e.message : String(e)}`);
+            log.error("nginx-manager", `❌ Failed to load existing path prefix: ${e instanceof Error ? e.message : String(e)}`);
             return null;
         }
     }
