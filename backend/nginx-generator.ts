@@ -183,7 +183,8 @@ export class NginxGenerator {
         lines.push("        proxy_set_header X-Forwarded-Proto $scheme;");
         lines.push("        proxy_http_version 1.1;");
         lines.push("        proxy_set_header Upgrade $http_upgrade;");
-        lines.push('        proxy_set_header Connection "upgrade";');
+        lines.push('        proxy_set_header Connection $http_connection;');
+        lines.push("        proxy_buffering off;");
         lines.push("        proxy_read_timeout 86400;");
         lines.push("");
 
@@ -207,7 +208,7 @@ export class NginxGenerator {
             lines.push("        proxy_set_header X-Forwarded-Proto $scheme;");
             lines.push("        proxy_http_version 1.1;");
             lines.push("        proxy_set_header Upgrade $http_upgrade;");
-            lines.push('        proxy_set_header Connection "upgrade";');
+            lines.push('        proxy_set_header Connection $http_connection;');
             lines.push("");
 
             if (dockgeToken) {
