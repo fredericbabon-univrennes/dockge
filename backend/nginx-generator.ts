@@ -7,6 +7,11 @@ import { log } from "./log";
 import http from "http";
 import https from "https";
 
+export interface NginxPortMapping {
+    hostPort: number;
+    containerPort: number;
+}
+
 export interface NginxGeneratedConfigs {
     preSsl: string;
     postSsl: string;
@@ -77,6 +82,7 @@ export class NginxGenerator {
      * @param sslKey - Path to SSL key
      * @param allowedIps - Array of allowed IP addresses
      * @param dockgeToken - Optional token for Dockge authentication
+     * @param extraPorts - Additional host:container port mappings for extra server blocks
      * @returns Generated configurations
      */
     generateConfigs(
@@ -88,13 +94,17 @@ export class NginxGenerator {
         sslCert: string = "/etc/nginx/ssl/wildcard.crt",
         sslKey: string = "/etc/nginx/ssl/wildcard.key",
         allowedIps: string[] = ["127.0.0.1"],
-        dockgeToken?: string
+        dockgeToken?: string,
+        extraPorts?: NginxPortMapping[]
     ): NginxGeneratedConfigs {
         // Use provided parameters directly (simplified approach without presets)
         const effectivePort = port || 8080;
         const effectivePathPrefix = pathPrefix || "/";
 
         console.log(`[NGINX-GENERATOR] 📝 Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
+        if (extraPorts && extraPorts.length > 0) {
+            console.log(`[NGINX-GENERATOR] 📝 Extra ports: ${JSON.stringify(extraPorts)}`);
+        }
 
         return {
             preSsl: this.generatePreSslConfig(stackName, fqdn || stackName, acmeDir),
@@ -108,6 +118,14 @@ export class NginxGenerator {
                 allowedIps,
                 stackName === "dockge",
                 dockgeToken
+            ) + this.generateExtraPortConfigs(
+                stackName,
+                fqdn || stackName,
+                effectivePort,
+                sslCert,
+                sslKey,
+                allowedIps,
+                extraPorts || []
             )
         };
     }
@@ -223,6 +241,94 @@ export class NginxGenerator {
         // ========== client_max_body_size for large uploads ==========
         lines.push("    client_max_body_size 0;");
         lines.push("}");
+        return lines.join("\n");
+    }
+
+    /**
+     * Generate extra server blocks for custom-forward-ports
+     * Each extra port mapping gets its own SSL server block
+     */
+    private generateExtraPortConfigs(
+        stackName: string,
+        fqdn: string,
+        primaryPort: number,
+        sslCert: string,
+        sslKey: string,
+        allowedIps: string[],
+        extraPorts: NginxPortMapping[]
+    ): string {
+        if (!extraPorts || extraPorts.length === 0) {
+            return "";
+        }
+
+        let output = "\n";
+
+        for (const mapping of extraPorts) {
+            // Skip if the host port is the same as the primary port (no duplicate)
+            if (mapping.hostPort === primaryPort) {
+                continue;
+            }
+
+            output += this.generateExtraPortServerBlock(
+                fqdn,
+                mapping.hostPort,
+                mapping.containerPort,
+                sslCert,
+                sslKey,
+                allowedIps,
+                stackName === "dockge"
+            );
+        }
+
+        return output;
+    }
+
+    /**
+     * Generate a single server block for an extra forwarded port
+     */
+    private generateExtraPortServerBlock(
+        fqdn: string,
+        hostPort: number,
+        containerPort: number,
+        sslCert: string,
+        sslKey: string,
+        allowedIps: string[],
+        needsDockgeToken: boolean = false,
+        dockgeToken?: string
+    ): string {
+        const lines: string[] = [];
+
+        lines.push("server {");
+        lines.push(`    listen ${hostPort} ssl;`);
+        lines.push(`    server_name ${fqdn};`);
+        lines.push("");
+        lines.push(`    ssl_certificate      ${sslCert};`);
+        lines.push(`    ssl_certificate_key  ${sslKey};`);
+        lines.push("");
+
+        lines.push("    location / {");
+        lines.push(`        proxy_pass http://127.0.0.1:${containerPort};`);
+        lines.push("        proxy_set_header Host $host;");
+        lines.push("        proxy_set_header X-Real-IP $remote_addr;");
+        lines.push("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;");
+        lines.push("        proxy_set_header X-Forwarded-Proto $scheme;");
+        lines.push("        proxy_http_version 1.1;");
+        lines.push("        proxy_set_header Upgrade $http_upgrade;");
+        lines.push('        proxy_set_header Connection $http_connection;');
+        lines.push("        proxy_buffering off;");
+        lines.push("        proxy_read_timeout 86400;");
+        lines.push("");
+
+        if (needsDockgeToken && dockgeToken) {
+            lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
+        }
+
+        lines.push("        include /etc/nginx/allowed_ips.conf;");
+        lines.push("    }");
+        lines.push("");
+        lines.push("    client_max_body_size 0;");
+        lines.push("}");
+
         return lines.join("\n");
     }
 

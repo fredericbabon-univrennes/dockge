@@ -181,6 +181,15 @@
                                 </label>
                                 <ArrayInput name="urls" :display-name="$t('url')" placeholder="https://" object-type="x-dockge" />
                             </div>
+
+                            <!-- Custom Forward Ports -->
+                            <div class="mb-4">
+                                <label class="form-label">
+                                    {{ $tc("customForwardPort", 2) }}
+                                </label>
+                                <ArrayInput name="custom-forward-ports" :display-name="$t('customForwardPort')" placeholder="HOST:CONTAINER" object-type="x-dockge" />
+                                <small class="form-text text-muted">{{ $t("customForwardPortDesc") }}</small>
+                            </div>
                         </div>
                     </div>
 

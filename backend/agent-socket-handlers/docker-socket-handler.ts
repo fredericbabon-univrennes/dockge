@@ -13,7 +13,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
         agentSocket.on("deployStack", async (name : unknown, composeYAML : unknown, composeENV : unknown, isAdd : unknown, callback) => {
             try {
                 checkLogin(socket);
-                const stack = await this.saveStack(server, name, composeYAML, composeENV, isAdd);
+                const stack = await this.saveStack(server, name, composeYAML as string, composeENV as string, isAdd as boolean);
 
                 // ✨ NGINX GENERATION
                 if (server.generateNginxOnStackCreate) {
@@ -22,7 +22,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         // Only pass customPathPrefix if it's not the default "/"
                         // This allows the nginx-manager to load existing config for preservation
                         const customPathPrefix = stack.nginxPathPrefix !== "/" ? stack.nginxPathPrefix : undefined;
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix, composeYAML as string);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                         // Notify frontend of cache update
                         await server.sendInfo(socket);
@@ -47,7 +47,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
         agentSocket.on("saveStack", async (name : unknown, composeYAML : unknown, composeENV : unknown, isAdd : unknown, callback) => {
             try {
                 checkLogin(socket);
-                const stack = await this.saveStack(server, name, composeYAML, composeENV, isAdd);
+                const stack = await this.saveStack(server, name, composeYAML as string, composeENV as string, isAdd as boolean);
 
                 // ✨ NGINX GENERATION
                 if (server.generateNginxOnStackCreate) {
@@ -56,7 +56,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         // Only pass customPathPrefix if it's not the default "/"
                         // This allows the nginx-manager to load existing config for preservation
                         const customPathPrefix = stack.nginxPathPrefix !== "/" ? stack.nginxPathPrefix : undefined;
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix);
+                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix, composeYAML as string);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                         // Notify frontend of cache update
                         await server.sendInfo(socket);
