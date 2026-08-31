@@ -102,7 +102,9 @@ export class NginxGenerator {
 
         console.log(`[NGINX-GENERATOR] Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
         if (extraUrlMappings && extraUrlMappings.length > 0) {
-            console.log(`[NGINX-GENERATOR] Extra URL mappings: ${JSON.stringify(extraUrlMappings.map(m => ({ fqdn: m.fqdn, containerPort: m.containerPort }))));
+            console.log(`[NGINX-GENERATOR] Extra URL mappings: ${JSON.stringify(extraUrlMappings.map(m => (
+                { fqdn: m.fqdn, containerPort: m.containerPort }
+            )))}`);
         }
 
         // Generate the pre-SSL block with ALL FQDNs listed (wildcard can cover all subdomains)
