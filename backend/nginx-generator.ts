@@ -99,6 +99,7 @@ export class NginxGenerator {
     ): NginxGeneratedConfigs {
         const effectivePort = port || 8080;
         const effectivePathPrefix = pathPrefix || "/";
+        const primaryFqdn = fqdn || stackName;
 
         console.log(`[NGINX-GENERATOR] Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
         if (extraUrlMappings && extraUrlMappings.length > 0) {
@@ -108,12 +109,12 @@ export class NginxGenerator {
         }
 
         // Generate the pre-SSL block with ALL FQDNs listed (wildcard can cover all subdomains)
-        const preSsl = this.generatePreSslConfigs(fqdn || stackName, acmeDir);
+        const preSsl = this.generatePreSslConfigs(primaryFqdn, acmeDir);
 
         // Primary server block
         const postSsl = this.generatePostSslConfig(
             stackName,
-            fqdn || stackName,
+            primaryFqdn,
             effectivePort,
             effectivePathPrefix,
             sslCert,
@@ -122,9 +123,13 @@ export class NginxGenerator {
             dockgeToken
         );
 
-        // Extra server blocks for URL mappings
+        // Extra server blocks for URL mappings (exclude the primary FQDN to avoid duplicates)
+        const filteredMappings = extraUrlMappings?.filter(m => m.fqdn !== primaryFqdn) || [];
+        console.log(`[NGINX-GENERATOR] Filtered extra mappings (excluding primary FQDN ${primaryFqdn}): ${JSON.stringify(filteredMappings.map(m => (
+            { fqdn: m.fqdn, containerPort: m.containerPort }
+        )))}`);
         const extraBlocks = this.generateExtraServerBlocks(
-            extraUrlMappings || [],            
+            filteredMappings,            
             sslCert,
             sslKey
         );

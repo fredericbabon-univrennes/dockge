@@ -419,6 +419,7 @@ export default {
 
             let urls = [];
             for (const urlItem of this.envsubstJSONConfig["x-dockge"].urls) {
+                console.debug("urlItem="+urlItem);
                 let display;
                 let actualUrl = urlItem;
 
@@ -432,6 +433,8 @@ export default {
                     }
                 }
 
+                console.debug("actualUrl="+actualUrl);
+
                 try {
                     let obj = new URL(actualUrl);
                     let pathname = obj.pathname;
@@ -442,6 +445,9 @@ export default {
                 } catch (e) {
                     display = actualUrl;
                 }
+
+                console.debug("display="+display);
+                console.debug("actualUrl="+actualUrl);
 
                 urls.push({
                     display,
