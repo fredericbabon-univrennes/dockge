@@ -7,9 +7,11 @@ import { log } from "./log";
 import http from "http";
 import https from "https";
 
-export interface NginxPortMapping {
-    hostPort: number;
+export interface UrlPortMapping {
+    url: string;
+    fqdn: string;
     containerPort: number;
+    pathPrefix?: string;
 }
 
 export interface NginxGeneratedConfigs {
@@ -24,7 +26,6 @@ export class NginxGenerator {
      */
     async getPublicIp(): Promise<string | null> {
         try {
-            // Try Google Cloud metadata service
             return await this.getPublicIpFromGcp();
         } catch (e) {
             log.warn("nginx-generator", `Failed to get public IP from GCP: ${e.message}`);
@@ -71,6 +72,7 @@ export class NginxGenerator {
     formatIpForDomain(ip: string): string {
         return ip.replace(/\./g, "-");
     }
+
     /**
      * Generate both pre-SSL and post-SSL configurations
      * @param stackName - Name of the stack
@@ -79,10 +81,9 @@ export class NginxGenerator {
      * @param fqdn - Fully qualified domain name (e.g., jupyter.192-168-1-1.sslip.io)
      * @param acmeDir - ACME challenge directory
      * @param sslCert - Path to SSL certificate
-     * @param sslKey - Path to SSL key
-     * @param allowedIps - Array of allowed IP addresses
+     * @param sslKey - Path to SSL key     
      * @param dockgeToken - Optional token for Dockge authentication
-     * @param extraPorts - Additional host:container port mappings for extra server blocks
+     * @param extraUrlMappings - Additional FQDN:port URL mappings for extra server blocks
      * @returns Generated configurations
      */
     generateConfigs(
@@ -92,50 +93,51 @@ export class NginxGenerator {
         fqdn?: string,
         acmeDir: string = "/var/www/acme",
         sslCert: string = "/etc/nginx/ssl/wildcard.crt",
-        sslKey: string = "/etc/nginx/ssl/wildcard.key",
-        allowedIps: string[] = ["127.0.0.1"],
+        sslKey: string = "/etc/nginx/ssl/wildcard.key",        
         dockgeToken?: string,
-        extraPorts?: NginxPortMapping[]
+        extraUrlMappings?: UrlPortMapping[]
     ): NginxGeneratedConfigs {
-        // Use provided parameters directly (simplified approach without presets)
         const effectivePort = port || 8080;
         const effectivePathPrefix = pathPrefix || "/";
 
-        console.log(`[NGINX-GENERATOR] 📝 Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
-        if (extraPorts && extraPorts.length > 0) {
-            console.log(`[NGINX-GENERATOR] 📝 Extra ports: ${JSON.stringify(extraPorts)}`);
+        console.log(`[NGINX-GENERATOR] Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
+        if (extraUrlMappings && extraUrlMappings.length > 0) {
+            console.log(`[NGINX-GENERATOR] Extra URL mappings: ${JSON.stringify(extraUrlMappings.map(m => ({ fqdn: m.fqdn, containerPort: m.containerPort }))));
         }
 
+        // Generate the pre-SSL block with ALL FQDNs listed (wildcard can cover all subdomains)
+        const preSsl = this.generatePreSslConfigs(fqdn || stackName, acmeDir);
+
+        // Primary server block
+        const postSsl = this.generatePostSslConfig(
+            stackName,
+            fqdn || stackName,
+            effectivePort,
+            effectivePathPrefix,
+            sslCert,
+            sslKey,            
+            stackName === "dockge",
+            dockgeToken
+        );
+
+        // Extra server blocks for URL mappings
+        const extraBlocks = this.generateExtraServerBlocks(
+            extraUrlMappings || [],            
+            sslCert,
+            sslKey
+        );
+
         return {
-            preSsl: this.generatePreSslConfig(stackName, fqdn || stackName, acmeDir),
-            postSsl: this.generatePostSslConfig(
-                stackName,
-                fqdn || stackName,
-                effectivePort,
-                effectivePathPrefix,
-                sslCert,
-                sslKey,
-                allowedIps,
-                stackName === "dockge",
-                dockgeToken
-            ) + this.generateExtraPortConfigs(
-                stackName,
-                fqdn || stackName,
-                effectivePort,
-                sslCert,
-                sslKey,
-                allowedIps,
-                extraPorts || []
-            )
+            preSsl,
+            postSsl: postSsl + extraBlocks
         };
     }
 
     /**
-     * Generate pre-SSL configuration (port 80)
-     * Handles ACME challenges and redirects to HTTPS
+     * Generate pre-SSL configurations (port 80) for all FQDNs
+     * Each FQDN gets its own server block for ACME challenges and HTTPS redirect
      */
-    private generatePreSslConfig(
-        stackName: string,
+    private generatePreSslConfigs(        
         fqdn: string,
         acmeDir: string
     ): string {
@@ -158,8 +160,7 @@ export class NginxGenerator {
     }
 
     /**
-     * Generate post-SSL configuration (port 443)
-     * Main reverse proxy configuration with authentication and routing
+     * Generate post-SSL configuration (port 443) for a single FQDN
      */
     private generatePostSslConfig(
         stackName: string,
@@ -167,15 +168,13 @@ export class NginxGenerator {
         port: number,
         pathPrefix: string,
         sslCert: string,
-        sslKey: string,
-        allowedIps: string[],
+        sslKey: string,        
         needsDockgeToken: boolean = false,
         dockgeToken?: string
     ): string {
         const locationPath = pathPrefix === "/" ? "/" : pathPrefix;
         const lines: string[] = [];
 
-        // ========== Port 443 HTTPS main server block ==========
         lines.push("server {");
         lines.push("    listen 443 ssl;");
         lines.push(`    server_name ${fqdn};`);
@@ -184,7 +183,6 @@ export class NginxGenerator {
         lines.push(`    ssl_certificate_key  ${sslKey};`);
         lines.push("");
 
-        // ========== Root redirect to path_prefix if necessary ==========
         if (pathPrefix && pathPrefix !== "/") {
             lines.push("    location = / {");
             lines.push(`        return 302 https://$host${pathPrefix};`);
@@ -192,7 +190,6 @@ export class NginxGenerator {
             lines.push("");
         }
 
-        // ========== Main proxy location ==========
         lines.push(`    location ${locationPath} {`);
         lines.push(`        proxy_pass http://127.0.0.1:${port};`);
         lines.push("        proxy_set_header Host $host;");
@@ -206,17 +203,14 @@ export class NginxGenerator {
         lines.push("        proxy_read_timeout 86400;");
         lines.push("");
 
-        // ========== Dockge token injection ==========
         if (needsDockgeToken && dockgeToken) {
             lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
         }
 
-        // ========== IP access control ==========
         lines.push("        include /etc/nginx/allowed_ips.conf;");
         lines.push("    }");
         lines.push("");
 
-        // ========== Special routes for Dockge (assets, API, icons) ==========
         if (stackName === "dockge") {
             lines.push("    location ~ ^/(assets|api|apple-touch-icon.png|icon.svg|favicon.ico) {");
             lines.push(`        proxy_pass http://127.0.0.1:${port};`);
@@ -238,75 +232,75 @@ export class NginxGenerator {
             lines.push("");
         }
 
-        // ========== client_max_body_size for large uploads ==========
         lines.push("    client_max_body_size 0;");
         lines.push("}");
         return lines.join("\n");
     }
 
     /**
-     * Generate extra server blocks for custom-forward-ports
-     * Each extra port mapping gets its own SSL server block
+     * Generate extra HTTPS server blocks for URL:port mappings from x-dockge.urls
      */
-    private generateExtraPortConfigs(
-        stackName: string,
-        fqdn: string,
-        primaryPort: number,
+    private generateExtraServerBlocks(        
+        extraUrlMappings: UrlPortMapping[],        
         sslCert: string,
-        sslKey: string,
-        allowedIps: string[],
-        extraPorts: NginxPortMapping[]
+        sslKey: string        
     ): string {
-        if (!extraPorts || extraPorts.length === 0) {
+        if (!extraUrlMappings || extraUrlMappings.length === 0) {
             return "";
         }
 
         let output = "\n";
 
-        for (const mapping of extraPorts) {
-            // Skip if the host port is the same as the primary port (no duplicate)
-            if (mapping.hostPort === primaryPort) {
-                continue;
-            }
+        for (const mapping of extraUrlMappings) {
+            const fqdn = mapping.fqdn;
+            const containerPort = mapping.containerPort;
+            const pathPrefix = mapping.pathPrefix || "/";
 
-            output += this.generateExtraPortServerBlock(
+            log.info("nginx-generator", `Generating extra server block: ${fqdn} -> 127.0.0.1:${containerPort}`);
+
+            // Generate post-SSL block for this extra FQDN
+            output += this.generateExtraHttpsServerBlock(                
                 fqdn,
-                mapping.hostPort,
-                mapping.containerPort,
+                containerPort,
+                pathPrefix,
                 sslCert,
-                sslKey,
-                allowedIps,
-                stackName === "dockge"
+                sslKey               
             );
+            output += "\n";
         }
 
         return output;
     }
 
     /**
-     * Generate a single server block for an extra forwarded port
+     * Generate a single HTTPS server block for an extra URL:port mapping
      */
-    private generateExtraPortServerBlock(
+    private generateExtraHttpsServerBlock(        
         fqdn: string,
-        hostPort: number,
         containerPort: number,
+        pathPrefix: string,
         sslCert: string,
-        sslKey: string,
-        allowedIps: string[],
-        needsDockgeToken: boolean = false,
-        dockgeToken?: string
+        sslKey: string
     ): string {
+        const locationPath = pathPrefix === "/" ? "/" : pathPrefix;
         const lines: string[] = [];
 
         lines.push("server {");
-        lines.push(`    listen ${hostPort} ssl;`);
+        lines.push("    listen 443 ssl;");
         lines.push(`    server_name ${fqdn};`);
         lines.push("");
         lines.push(`    ssl_certificate      ${sslCert};`);
         lines.push(`    ssl_certificate_key  ${sslKey};`);
         lines.push("");
 
-        lines.push("    location / {");
+        if (pathPrefix && pathPrefix !== "/") {
+            lines.push("    location = / {");
+            lines.push(`        return 302 https://$host${pathPrefix};`);
+            lines.push("    }");
+            lines.push("");
+        }
+
+        lines.push(`    location ${locationPath} {`);
         lines.push(`        proxy_pass http://127.0.0.1:${containerPort};`);
         lines.push("        proxy_set_header Host $host;");
         lines.push("        proxy_set_header X-Real-IP $remote_addr;");
@@ -318,14 +312,10 @@ export class NginxGenerator {
         lines.push("        proxy_buffering off;");
         lines.push("        proxy_read_timeout 86400;");
         lines.push("");
-
-        if (needsDockgeToken && dockgeToken) {
-            lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
-        }
-
         lines.push("        include /etc/nginx/allowed_ips.conf;");
         lines.push("    }");
         lines.push("");
+
         lines.push("    client_max_body_size 0;");
         lines.push("}");
 
@@ -356,8 +346,6 @@ export class NginxGenerator {
             errors.push("Missing 'server_name' directive");
         }
 
-        // Only check for proxy_pass if this is a service config (postSsl)
-        // preSsl is just for ACME and redirects, doesn't need proxy_pass
         if (requireProxyPass && configContent.includes("location") && !configContent.includes("proxy_pass ")) {
             errors.push("Missing 'proxy_pass' directive - no valid proxy location found");
         }
@@ -374,8 +362,6 @@ export class NginxGenerator {
      */
     extractPortFromCompose(composeYaml: string): number | null {
         try {
-            // Simple regex to find port mappings
-            // Looks for patterns like "8890:8888" or just "8890"
             const portMatch = composeYaml.match(/ports:\s*\n\s*-\s*['"]?(\d+):/);
             if (portMatch && portMatch[1]) {
                 return parseInt(portMatch[1], 10);

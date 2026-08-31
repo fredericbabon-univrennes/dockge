@@ -11,7 +11,7 @@ import yaml from "yaml";
 import { Stack } from "./stack";
 import { DockgeServer } from "./dockge-server";
 import { log } from "./log";
-import { NginxGenerator, NginxGeneratedConfigs, NginxPortMapping } from "./nginx-generator";
+import { NginxGenerator, NginxGeneratedConfigs, UrlPortMapping } from "./nginx-generator";
 import { getDefaultPathPrefix, extractPathPrefixFromNginxConfig } from "./nginx-config-parser";
 
 export interface StackNginxInfo {
@@ -34,30 +34,27 @@ export class NginxManager {
      * Create or update Nginx configuration for a stack
      */
     async createOrUpdateNginxConfig(
-        stack: Stack,
-        isAdd: boolean,
-        customPort?: number,
+        stack: Stack,                
         customPathPrefix?: string,
         composeYAML?: string
     ): Promise<void> {
         try {
             log.info("nginx-manager", `🔧 Processing Nginx for stack: ${stack.name}`);
-            log.info("nginx-manager", `   isAdd=${isAdd}, customPort=${customPort}, customPathPrefix=${customPathPrefix}`);
+            log.info("nginx-manager", `   customPathPrefix=${customPathPrefix}`);
 
             // ========== 1. PREPARE STACK INFO ==========
             const stackInfo = this.prepareStackInfo(
-                stack.name,
-                customPort,
+                stack.name,               
                 customPathPrefix,
                 composeYAML || stack.composeYAML
             );
             log.info("nginx-manager", `   🎯 Stack Info: port=${stackInfo.port}, pathPrefix=${stackInfo.pathPrefix}, fqdn=${stackInfo.fqdn}`);
 
-            // ========== 1.5. PARSE EXTRA PORTS ==========
+            // ========== 1.5. PARSE EXTRA URL:MAPPINGS ==========
             const composeYAMLContent = composeYAML || stack.composeYAML;
-            const extraPorts = this.extractCustomForwardPorts(composeYAMLContent, stackInfo.port);
-            if (extraPorts.length > 0) {
-                log.info("nginx-manager", `   📡 Extra ports: ${JSON.stringify(extraPorts)}`);
+            const extraUrlMappings = this.extractUrlPortMappings(composeYAMLContent);
+            if (extraUrlMappings.length > 0) {
+                log.info("nginx-manager", `   📡 Extra URL mappings: ${JSON.stringify(extraUrlMappings.map(m => ({ fqdn: m.fqdn, containerPort: m.containerPort })))}`);
             }
 
             // ========== 2. GENERATE CONFIGS ==========
@@ -68,10 +65,9 @@ export class NginxManager {
                 stackInfo.fqdn,
                 this.server.nginxAcmeDir,
                 this.server.nginxSslCert,
-                this.server.nginxSslKey,
-                this.server.nginxAllowedIps,
+                this.server.nginxSslKey,                
                 process.env.DOCKGE_TOKEN,
-                extraPorts.length > 0 ? extraPorts : undefined
+                extraUrlMappings.length > 0 ? extraUrlMappings : undefined
             );
 
             // ========== 3. VALIDATE CONFIGS ==========
@@ -317,21 +313,20 @@ export class NginxManager {
      * Prepare stack information for Nginx config generation
      */
     private prepareStackInfo(
-        stackName: string,
-        customPort?: number,
+        stackName: string,        
         customPathPrefix?: string,
         composeYAML?: string
     ): StackNginxInfo {
         const stackNameLower = stackName.toLowerCase();
         
         log.debug("nginx-manager", `📊 Preparing stack info for: ${stackName}`);
-        log.debug("nginx-manager", `   customPort=${customPort}, customPathPrefix=${customPathPrefix}, hasCompose=${!!composeYAML}`);
+        log.debug("nginx-manager", `   customPathPrefix=${customPathPrefix}, hasCompose=${!!composeYAML}`);
         
         // Port priority: custom > compose-extracted > default
         const composeParsedPort = this.extractPortFromComposeYAML(composeYAML);
-        log.debug("nginx-manager", `   Port priority: custom=${customPort} > compose=${composeParsedPort} > default=${this.server.nginxDefaultPort}`);
+        log.debug("nginx-manager", `   Port priority: compose=${composeParsedPort} > default=${this.server.nginxDefaultPort}`);
         
-        const port = customPort || composeParsedPort || this.server.nginxDefaultPort;
+        const port = composeParsedPort || this.server.nginxDefaultPort;
         log.debug("nginx-manager", `   ✅ Final port: ${port}`);
         
         // Path prefix priority: custom > existing nginx config > default
@@ -480,104 +475,115 @@ export class NginxManager {
     }
 
     /**
-     * Extract custom-forward-ports from x-dockge section of compose YAML
-     * Format: "hostPort:containerPort" (e.g., "8080:7687")
+     * Extract extra URL:port mappings from x-dockge section of compose YAML
+     * Format: "https://host.sslip.io=7474" (URL with =port suffix for container port)
+     * Returns UrlPortMapping[] for nginx-generator.extraUrlMappings
      */
-    private extractCustomForwardPorts(composeYAML?: string, primaryPort?: number): NginxPortMapping[] {
+    private extractUrlPortMappings(composeYAML?: string): UrlPortMapping[] {
         if (!composeYAML) {
             return [];
         }
 
         try {
-            log.debug("nginx-manager", `📋 Parsing x-dockge.custom-forward-ports...`);
+            log.debug("nginx-manager", `📋 Parsing x-dockge.urls with port mappings...`);
             const composeData = yaml.parse(composeYAML);
 
-            const customForwardPorts = composeData?.["x-dockge"]?.["custom-forward-ports"];
+            const urls = composeData?.["x-dockge"]?.["urls"];
 
-            if (!customForwardPorts || !Array.isArray(customForwardPorts)) {
-                log.debug("nginx-manager", `   No custom-forward-ports found`);
+            if (!urls || !Array.isArray(urls)) {
+                log.debug("nginx-manager", `   No x-dockge.urls found`);
                 return [];
             }
 
-            const mappings: NginxPortMapping[] = [];
-            const existingHostPorts = this.extractAllHostPorts(composeYAML);
+            const mappings: UrlPortMapping[] = [];
 
-            for (const portSpec of customForwardPorts) {
-                log.debug("nginx-manager", `   Port spec: ${JSON.stringify(portSpec)} (type: ${typeof portSpec})`);
+            for (const urlEntry of urls) {
+                log.debug("nginx-manager", `   URL entry: ${JSON.stringify(urlEntry)} (type: ${typeof urlEntry})`);
 
-                if (typeof portSpec === "string") {
-                    // Format: "8080:7687" (hostPort:containerPort)
-                    const parts = portSpec.split(":");
-                    if (parts.length === 2) {
-                        const hostPort = parseInt(parts[0], 10);
-                        const containerPort = parseInt(parts[1], 10);
-                        if (!isNaN(hostPort) && !isNaN(containerPort)) {
-                            if (existingHostPorts.has(hostPort)) {
-                                log.warn("nginx-manager", `⚠️  Skipping host port ${hostPort} — already published in docker compose ports`);
+                if (typeof urlEntry === "string") {
+                    // Try parsing as "https://host.sslip.io=7474" (URL with =port suffix)
+                    const eqIndex = urlEntry.lastIndexOf("=");
+                    if (eqIndex > 0) {
+                        const urlPart = urlEntry.substring(0, eqIndex);
+                        const portPart = urlEntry.substring(eqIndex + 1);
+
+                        // Validate that urlPart is a valid URL
+                        try {
+                            new URL(urlPart);
+
+                            const containerPort = parseInt(portPart, 10);
+                            if (!isNaN(containerPort) && containerPort > 0) {
+                                const fqdn = new URL(urlPart).hostname;
+                                mappings.push({ url: urlEntry, fqdn, containerPort });
+                                log.info("nginx-manager", `✅ Added URL:port mapping: ${fqdn} -> ${containerPort}`);
                                 continue;
                             }
-                            mappings.push({ hostPort, containerPort });
-                            log.info("nginx-manager", `✅ Added extra port mapping: ${hostPort} -> ${containerPort}`);
+                        } catch (e) {
+                            // Invalid URL format, fall through to treat as plain URL
                         }
                     }
-                } else if (typeof portSpec === "number") {
-                    // Single number: use as container port, hostPort = containerPort
-                    const hostPort = portSpec;
-                    const containerPort = portSpec;
-                    if (existingHostPorts.has(hostPort)) {
-                        log.warn("nginx-manager", `⚠️  Skipping host port ${hostPort} — already published in docker compose ports`);
-                        continue;
+
+                    // Plain URL without port: try to extract from compose ports
+                    try {
+                        const url = new URL(urlEntry);
+                        const fqdn = url.hostname;
+
+                        // Look up the container port from compose service ports
+                        log.debug("nginx-manager", `   Plain URL found (no port suffix), extracting container port from compose...`);
+                        const portFromCompose = this.findContainerPortFromComposeYaml(composeYAML);
+                        if (portFromCompose) {
+                            mappings.push({ url: urlEntry, fqdn, containerPort: portFromCompose });
+                            log.info("nginx-manager", `✅ Added URL mapping: ${fqdn} -> ${portFromCompose} (from compose ports)`);
+                        } else {
+                            log.warn("nginx-manager", `⚠️  Could not find container port for ${fqdn} in compose ports`);
+                        }
+                    } catch (e) {
+                        log.warn("nginx-manager", `⚠️  Invalid URL format: ${urlEntry}`);
                     }
-                    mappings.push({ hostPort, containerPort });
-                    log.info("nginx-manager", `✅ Added extra port mapping: ${hostPort} -> ${containerPort}`);
                 }
             }
 
-            log.info("nginx-manager", `   📡 Final extra ports: ${JSON.stringify(mappings)}`);
+            log.info("nginx-manager", `   📡 Final URL mappings: ${JSON.stringify(mappings.map(m => ({ fqdn: m.fqdn, containerPort: m.containerPort })))}`);
             return mappings;
 
         } catch (e) {
-            log.error("nginx-manager", `❌ Error parsing custom-forward-ports: ${e instanceof Error ? e.message : String(e)}`);
+            log.error("nginx-manager", `❌ Error parsing x-dockge.urls: ${e instanceof Error ? e.message : String(e)}`);
             return [];
         }
     }
 
     /**
-     * Extract all host ports from compose YAML ports declarations (to avoid conflicts)
+     * Find the container port from compose YAML that corresponds to a given URL
+     * Returns the first published container port from compose services
      */
-    private extractAllHostPorts(composeYAML?: string): Set<number> {
-        const hostPorts = new Set<number>();
-
-        if (!composeYAML) {
-            return hostPorts;
-        }
-
+    private findContainerPortFromComposeYaml(composeYAML: string): number | null {
         try {
             const composeData = yaml.parse(composeYAML);
 
-            if (!composeData?.services) {
-                return hostPorts;
-            }
-
-            for (const [, service] of Object.entries(composeData.services) as [string, any][]) {
-                if (service.ports && Array.isArray(service.ports)) {
-                    for (const portSpec of service.ports) {
-                        if (typeof portSpec === "string") {
-                            const parts = portSpec.split(":");
-                            const hostPort = parseInt(parts[0], 10);
-                            if (!isNaN(hostPort)) {
-                                hostPorts.add(hostPort);
+            // Return the first published container port from compose services
+            if (composeData?.services) {
+                for (const [, service] of Object.entries(composeData.services) as [string, any][]) {
+                    if (service.ports && Array.isArray(service.ports)) {
+                        for (const portSpec of service.ports) {
+                            if (typeof portSpec === "string") {
+                                const parts = portSpec.split(":");
+                                // Extract container port (last part)
+                                const containerPort = parseInt(parts[parts.length - 1].split("/")[0], 10);
+                                if (!isNaN(containerPort)) {
+                                    return containerPort;
+                                }
+                            } else if (typeof portSpec === "number") {
+                                return portSpec;
                             }
-                        } else if (typeof portSpec === "number") {
-                            hostPorts.add(portSpec);
                         }
                     }
                 }
             }
-        } catch (e) {
-            log.warn("nginx-manager", `Failed to extract host ports: ${e instanceof Error ? e.message : String(e)}`);
-        }
 
-        return hostPorts;
+            return null;
+        } catch (e) {
+            log.warn("nginx-manager", `Failed to find container port from URL: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
     }
 }

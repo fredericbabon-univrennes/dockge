@@ -22,7 +22,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         // Only pass customPathPrefix if it's not the default "/"
                         // This allows the nginx-manager to load existing config for preservation
                         const customPathPrefix = stack.nginxPathPrefix !== "/" ? stack.nginxPathPrefix : undefined;
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix, composeYAML as string);
+                        await nginxManager.createOrUpdateNginxConfig(stack, customPathPrefix, composeYAML as string);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                         // Notify frontend of cache update
                         await server.sendInfo(socket);
@@ -56,7 +56,7 @@ export class DockerSocketHandler extends AgentSocketHandler {
                         // Only pass customPathPrefix if it's not the default "/"
                         // This allows the nginx-manager to load existing config for preservation
                         const customPathPrefix = stack.nginxPathPrefix !== "/" ? stack.nginxPathPrefix : undefined;
-                        await nginxManager.createOrUpdateNginxConfig(stack, isAdd, undefined, customPathPrefix, composeYAML as string);
+                        await nginxManager.createOrUpdateNginxConfig(stack, customPathPrefix, composeYAML as string);
                         log.info("docker-socket-handler", `✅ Nginx config generated for stack: ${stack.name}`);
                         // Notify frontend of cache update
                         await server.sendInfo(socket);

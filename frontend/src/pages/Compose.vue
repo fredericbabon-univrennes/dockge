@@ -181,15 +181,6 @@
                                 </label>
                                 <ArrayInput name="urls" :display-name="$t('url')" placeholder="https://" object-type="x-dockge" />
                             </div>
-
-                            <!-- Custom Forward Ports -->
-                            <div class="mb-4">
-                                <label class="form-label">
-                                    {{ $tc("customForwardPort", 2) }}
-                                </label>
-                                <ArrayInput name="custom-forward-ports" :display-name="$t('customForwardPort')" placeholder="HOST:CONTAINER" object-type="x-dockge" />
-                                <small class="form-text text-muted">{{ $t("customForwardPortDesc") }}</small>
-                            </div>
                         </div>
                     </div>
 
@@ -427,22 +418,34 @@ export default {
             }
 
             let urls = [];
-            for (const url of this.envsubstJSONConfig["x-dockge"].urls) {
+            for (const urlItem of this.envsubstJSONConfig["x-dockge"].urls) {
                 let display;
+                let actualUrl = urlItem;
+
+                // Strip optional "=port" suffix for URL parsing
+                const eqIndex = urlItem.lastIndexOf("=");
+                if (eqIndex > 0) {
+                    const potentialPort = urlItem.substring(eqIndex + 1);
+                    // Only strip if the part after "=" looks like a port (digits only)
+                    if (/^\d+$/.test(potentialPort)) {
+                        actualUrl = urlItem.substring(0, eqIndex);
+                    }
+                }
+
                 try {
-                    let obj = new URL(url);
+                    let obj = new URL(actualUrl);
                     let pathname = obj.pathname;
                     if (pathname === "/") {
                         pathname = "";
                     }
                     display = obj.host + pathname + obj.search;
                 } catch (e) {
-                    display = url;
+                    display = actualUrl;
                 }
 
                 urls.push({
                     display,
-                    url,
+                    actualUrl,
                 });
             }
             return urls;
