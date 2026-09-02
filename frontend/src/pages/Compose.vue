@@ -68,28 +68,6 @@
                 </a>
             </div>
 
-            <!-- Nginx Configuration Info -->
-            <div v-if="(isEditMode || isAdd || (!isEditMode && !isAdd && nginxInfo))" class="mb-3">
-                <div class="shadow-box big-padding">
-                    <h5 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h5>
-                    <div class="row">
-                        <!-- Display FQDN and Port (read-only) when stack exists -->
-                        <template v-if="!isAdd && nginxInfo">
-                            <div class="col-md-6">
-                                <small class="d-block text-muted mb-1">{{ $t("FQDN") || "FQDN" }}</small>
-                                <p class="mb-3">
-                                    <code>{{ nginxInfo.fqdn }}</code>
-                                </p>
-                            </div>
-                            <div class="col-md-6">
-                                <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
-                                <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
-                            </div>
-                        </template>                        
-                    </div>
-                </div>
-            </div>
-
 
 
             <!-- Progress Terminal -->
@@ -247,6 +225,23 @@
                         </div>
                     </div>
 
+                    <!-- Nginx Configuration (read-only display) -->
+                    <div v-if="!isAdd && nginxConfig" class="mb-3">
+                        <h4 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h4>
+                        <div class="shadow-box mb-3 editor-box nginx-config-box">
+                            <code-mirror
+                                v-model="nginxConfig"
+                                :extensions="extensions"
+                                minimal
+                                wrap="true"
+                                dark="true"
+                                tab="true"
+                                :disabled="true"
+                                style="max-height: 400px; overflow-y: auto;"
+                            />
+                        </div>
+                    </div>
+
                     <!-- <div class="shadow-box big-padding mb-3">
                         <div class="mb-3">
                             <label for="name" class="form-label"> Search Templates</label>
@@ -369,19 +364,11 @@ export default {
         };
     },
     computed: {
-        nginxInfo() {
-            if (this.isAdd || !this.stack.name) {
+        nginxConfig() {
+            if (this.isAdd || !this.stack.name || !this.stack.nginxConfig) {
                 return null;
             }
-
-            const stackName = this.stack.name.toLowerCase();
-            const domainSuffix = this.$root.info?.nginxDomainSuffix || "sslip.io";
-            const fqdn = `${stackName}.${domainSuffix}`;            
-
-            // Fall back to stack properties if not in cache
-            return {
-                fqdn: fqdn
-            };
+            return this.stack.nginxConfig;
         },
 
         endpointDisplay() {

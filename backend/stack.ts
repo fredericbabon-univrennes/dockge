@@ -71,11 +71,19 @@ export class Stack {
         }
 
         let obj = this.toSimpleJSON(endpoint);
+        
+        // Load nginx configuration if it exists
+        let nginxConfig: string | null = null;
+        if (this.server.nginxManager && this.isManagedByDockge) {
+            nginxConfig = this.server.nginxManager.getNginxConfig(this.name);
+        }
+        
         return {
             ...obj,
             composeYAML: this.composeYAML,
             composeENV: this.composeENV,
             primaryHostname,
+            nginxConfig,
         };
     }
 

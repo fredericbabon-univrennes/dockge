@@ -39,6 +39,7 @@ import { AgentSocketHandler } from "./agent-socket-handler";
 import { AgentSocket } from "../common/agent-socket";
 import { ManageAgentSocketHandler } from "./socket-handlers/manage-agent-socket-handler";
 import { Terminal } from "./terminal";
+import { NginxManager } from "./nginx-manager";
 
 export class DockgeServer {
     app : Express;
@@ -97,6 +98,11 @@ export class DockgeServer {
      * Background task interval ID for stats caching
      */
     statsRefreshInterval: NodeJS.Timer | null = null;
+
+    /**
+     * Nginx Manager instance for handling nginx configurations
+     */
+    nginxManager: NginxManager | null = null;
 
     /**
      * ========== NGINX CONFIGURATION PROPERTIES ==========
@@ -560,6 +566,10 @@ export class DockgeServer {
 
         // Load existing Nginx configurations
         if (this.generateNginxOnStackCreate) {                      
+
+            // Initialize Nginx Manager
+            this.nginxManager = new NginxManager(this);
+            log.info("server", "✅ Nginx Manager initialized");
 
             // Load public IP for FQDN generation (non-blocking)
             try {
