@@ -405,7 +405,7 @@ export default {
                     continue;
                 }
 
-                let urlBase: URL;
+                let urlBase;
                 try {
                     urlBase = new URL(urlPart);
                 } catch (e) {
