@@ -414,7 +414,7 @@ export default {
                 }
 
                 // Parse port and path components
-                let portPart: string | undefined;
+                let portPart;
                 let pathPrefix = "/";
 
                 if (parts.length === 1) {
@@ -438,7 +438,7 @@ export default {
                 }
 
                 // Parse port information
-                let publicPort: number | undefined;
+                let publicPort;
                 if (portPart) {
                     if (portPart.includes(":")) {
                         const [pubStr] = portPart.split(":").map(p => p.trim());
@@ -461,7 +461,7 @@ export default {
                 }
 
                 // Construct display text
-                let display: string;
+                let display;
                 try {
                     let hostDisplay = urlBase.hostname;
                     if (publicPort !== undefined) {
