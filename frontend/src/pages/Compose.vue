@@ -226,28 +226,27 @@
                     </div>
 
                     <!-- Nginx Configuration (read-only display) -->
-                    <div v-if="!isAdd && stack && stack.nginxConfig" class="mb-3">
+                    <div v-if="!isAdd" class="mb-3">
                         <h4 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h4>
                         <div class="shadow-box mb-3 editor-box nginx-config-box">
-                            <code-mirror
-                                :value="stack.nginxConfig"
-                                :extensions="extensions"
-                                minimal
-                                wrap="true"
-                                dark="true"
-                                tab="true"
-                                :disabled="true"
-                                style="max-height: 400px; overflow-y: auto;"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Debug: Show if nginxConfig is available -->
-                    <div v-else-if="!isAdd && stack" class="mb-3">
-                        <div class="alert alert-info small">
-                            nginxConfig disponible: {{ stack.nginxConfig ? 'OUI' : 'NON' }}
-                            <br/>Stack name: {{ stack.name }}
-                            <br/>Stack keys: {{ Object.keys(stack).join(', ') }}
+                            <div v-if="stack && stack.nginxConfig" class="nginx-config-content">
+                                <code-mirror
+                                    :value="stack.nginxConfig"
+                                    :extensions="extensions"
+                                    minimal
+                                    wrap="true"
+                                    dark="true"
+                                    tab="true"
+                                    :disabled="true"
+                                    style="max-height: 400px; overflow-y: auto;"
+                                />
+                            </div>
+                            <div v-else class="p-3 text-muted">
+                                <small>
+                                    <strong>ℹ️ Nginx configuration not generated yet</strong>
+                                    <br/>Deploy or update this stack to generate its Nginx configuration.
+                                </small>
+                            </div>
                         </div>
                     </div>
 

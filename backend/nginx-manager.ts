@@ -289,20 +289,20 @@ export class NginxManager {
 
     /**
      * Get the Nginx configuration for a stack
-     * Returns the raw nginx configuration content if it exists
+     * Returns the raw nginx configuration content from production location
      */
     getNginxConfig(stackName: string): string | null {
         try {
-            const stackDir = path.join(this.server.stacksDir, stackName);
-            const localNginxPath = path.join(stackDir, "nginx.conf");
+            const prodNginxPath = path.join(this.server.nginxConfigDir, stackName);
+            log.debug("nginx-manager", `📭 Looking for nginx config at: ${prodNginxPath}`);
 
-            if (!fs.existsSync(localNginxPath)) {
+            if (!fs.existsSync(prodNginxPath)) {
                 log.debug("nginx-manager", `📭 No nginx config found for stack: ${stackName}`);
                 return null;
             }
 
-            const config = fs.readFileSync(localNginxPath, "utf-8");
-            log.debug("nginx-manager", `✅ Loaded nginx config for stack: ${stackName}`);
+            const config = fs.readFileSync(prodNginxPath, "utf-8");
+            log.debug("nginx-manager", `✅ Loaded nginx config: ${stackName} (${config.length} bytes)`);
             return config;
         } catch (error: any) {
             log.error("nginx-manager", `❌ Error reading Nginx config for stack ${stackName}: ${error.message}`);

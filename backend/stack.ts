@@ -75,7 +75,11 @@ export class Stack {
         // Load nginx configuration if it exists
         let nginxConfig: string | null = null;
         if (this.server.nginxManager && this.isManagedByDockge) {
+            log.debug("stack", `🔍 Attempting to load nginx config for stack: ${this.name}`);
             nginxConfig = this.server.nginxManager.getNginxConfig(this.name);
+            log.info("stack", `   Nginx config result: ${nginxConfig ? 'LOADED (' + nginxConfig.length + ' bytes)' : 'NOT FOUND'}`);
+        } else {
+            log.debug("stack", `⏭️  Skipping nginx config load: nginxManager=${!!this.server.nginxManager}, isManagedByDockge=${this.isManagedByDockge}`);
         }
         
         return {
