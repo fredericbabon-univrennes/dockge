@@ -11,6 +11,7 @@ export interface UrlPortMapping {
     url: string;
     fqdn: string;
     containerPort: number;
+    publicPort?: number;
     pathPrefix?: string;
 }
 
@@ -161,14 +162,16 @@ export class NginxGenerator {
         for (const mapping of extraUrlMappings) {
             const fqdn = mapping.fqdn;
             const containerPort = mapping.containerPort;
+            const publicPort = mapping.publicPort;
             const pathPrefix = mapping.pathPrefix || "/";
 
-            log.info("nginx-generator", `Generating extra server block: ${fqdn} -> 127.0.0.1:${containerPort}`);
+            log.info("nginx-generator", `Generating extra server block: ${fqdn} -> 127.0.0.1:${containerPort}${publicPort ? ` (port ${publicPort})` : ""}`);
 
             // Generate post-SSL block for this extra FQDN
             output += this.generateExtraHttpsServerBlock(                
                 fqdn,
                 containerPort,
+                publicPort,
                 pathPrefix,
                 sslCert,
                 sslKey               
@@ -185,15 +188,17 @@ export class NginxGenerator {
     private generateExtraHttpsServerBlock(        
         fqdn: string,
         containerPort: number,
+        publicPort: number | undefined,
         pathPrefix: string,
         sslCert: string,
         sslKey: string
     ): string {
         const locationPath = pathPrefix === "/" ? "/" : pathPrefix;
+        const listenPort = publicPort || 443;
         const lines: string[] = [];
 
         lines.push("server {");
-        lines.push("    listen 443 ssl;");
+        lines.push(`    listen ${listenPort} ssl;`);
         lines.push(`    server_name ${fqdn};`);
         lines.push("");
         lines.push(`    ssl_certificate      ${sslCert};`);
