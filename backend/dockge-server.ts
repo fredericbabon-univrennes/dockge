@@ -152,10 +152,7 @@ export class DockgeServer {
      */
     nginxDefaultPort: number = 8080;
 
-    /**
-     * Cache of existing Nginx configurations loaded from nginxConfigDir
-     */
-    nginxConfigCache: { [stackName: string]: any } = {};
+    
 
     /**
      * ========== END NGINX PROPERTIES ==========
@@ -562,15 +559,7 @@ export class DockgeServer {
         }
 
         // Load existing Nginx configurations
-        if (this.generateNginxOnStackCreate) {
-            log.info("server", `🔍 Attempting to load Nginx configs from: ${this.nginxConfigDir}`);
-            try {
-                const { loadExistingNginxConfigs } = await import("./nginx-config-loader");
-                this.nginxConfigCache = await loadExistingNginxConfigs(this.nginxConfigDir);
-                log.info("server", `✅ Loaded ${Object.keys(this.nginxConfigCache).length} Nginx config(s): [${Object.keys(this.nginxConfigCache).join(", ")}]`);
-            } catch (e) {
-                log.error("server", `❌ Failed to load Nginx configs: ${e instanceof Error ? e.message : String(e)}`);
-            }            
+        if (this.generateNginxOnStackCreate) {                      
 
             // Load public IP for FQDN generation (non-blocking)
             try {
@@ -667,8 +656,7 @@ export class DockgeServer {
             isContainer,
             primaryHostname: await Settings.get("primaryHostname"),
             nginxDomainSuffix: this.nginxDomainSuffix,
-            nginxEnabled: this.generateNginxOnStackCreate,
-            nginxConfigCache: this.nginxConfigCache,
+            nginxEnabled: this.generateNginxOnStackCreate,            
             //serverTimezone: await this.getTimezone(),
             //serverTimezoneOffset: this.getTimezoneOffset(),
         });

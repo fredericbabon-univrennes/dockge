@@ -87,21 +87,15 @@ export class NginxGenerator {
      * @returns Generated configurations
      */
     generateConfigs(
-        stackName: string,
-        port?: number,
-        pathPrefix?: string,
+        stackName: string,        
         fqdn?: string,
         acmeDir: string = "/var/www/acme",
         sslCert: string = "/etc/nginx/ssl/wildcard.crt",
-        sslKey: string = "/etc/nginx/ssl/wildcard.key",        
-        dockgeToken?: string,
+        sslKey: string = "/etc/nginx/ssl/wildcard.key",
         extraUrlMappings?: UrlPortMapping[]
     ): NginxGeneratedConfigs {
-        const effectivePort = port || 8080;
-        const effectivePathPrefix = pathPrefix || "/";
-        const primaryFqdn = fqdn || stackName;
 
-        console.log(`[NGINX-GENERATOR] Generating configs: stack=${stackName}, port=${effectivePort}, path=${effectivePathPrefix}`);
+        console.log(`[NGINX-GENERATOR] Generating configs: stack=${stackName}`);
         if (extraUrlMappings && extraUrlMappings.length > 0) {
             console.log(`[NGINX-GENERATOR] Extra URL mappings: ${JSON.stringify(extraUrlMappings.map(m => (
                 { fqdn: m.fqdn, containerPort: m.containerPort }
@@ -109,34 +103,18 @@ export class NginxGenerator {
         }
 
         // Generate the pre-SSL block with ALL FQDNs listed (wildcard can cover all subdomains)
-        const preSsl = this.generatePreSslConfigs(primaryFqdn, acmeDir);
+        const preSsl = this.generatePreSslConfigs(fqdn || stackName, acmeDir);        
 
-        // Primary server block
-        const postSsl = this.generatePostSslConfig(
-            stackName,
-            primaryFqdn,
-            effectivePort,
-            effectivePathPrefix,
-            sslCert,
-            sslKey,            
-            stackName === "dockge",
-            dockgeToken
-        );
-
-        // Extra server blocks for URL mappings (exclude the primary FQDN to avoid duplicates)
-        const filteredMappings = extraUrlMappings?.filter(m => m.fqdn !== primaryFqdn) || [];
-        console.log(`[NGINX-GENERATOR] Filtered extra mappings (excluding primary FQDN ${primaryFqdn}): ${JSON.stringify(filteredMappings.map(m => (
-            { fqdn: m.fqdn, containerPort: m.containerPort }
-        )))}`);
+        // Extra server blocks for URL mappings
         const extraBlocks = this.generateExtraServerBlocks(
-            filteredMappings,            
+            extraUrlMappings || [],            
             sslCert,
             sslKey
         );
 
         return {
             preSsl,
-            postSsl: postSsl + extraBlocks
+            postSsl: extraBlocks
         };
     }
 
@@ -164,85 +142,7 @@ export class NginxGenerator {
         ];
 
         return lines.join("\n");
-    }
-
-    /**
-     * Generate post-SSL configuration (port 443) for a single FQDN
-     */
-    private generatePostSslConfig(
-        stackName: string,
-        fqdn: string,
-        port: number,
-        pathPrefix: string,
-        sslCert: string,
-        sslKey: string,        
-        needsDockgeToken: boolean = false,
-        dockgeToken?: string
-    ): string {
-        const locationPath = pathPrefix === "/" ? "/" : pathPrefix;
-        const lines: string[] = [];
-
-        lines.push("server {");
-        lines.push("    listen 443 ssl;");
-        lines.push(`    server_name ${fqdn};`);
-        lines.push("");
-        lines.push(`    ssl_certificate      ${sslCert};`);
-        lines.push(`    ssl_certificate_key  ${sslKey};`);
-        lines.push("");
-
-        if (pathPrefix && pathPrefix !== "/") {
-            lines.push("    location = / {");
-            lines.push(`        return 302 https://$host${pathPrefix};`);
-            lines.push("    }");
-            lines.push("");
-        }
-
-        lines.push(`    location ${locationPath} {`);
-        lines.push(`        proxy_pass http://127.0.0.1:${port};`);
-        lines.push("        proxy_set_header Host $host;");
-        lines.push("        proxy_set_header X-Real-IP $remote_addr;");
-        lines.push("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;");
-        lines.push("        proxy_set_header X-Forwarded-Proto $scheme;");
-        lines.push("        proxy_http_version 1.1;");
-        lines.push("        proxy_set_header Upgrade $http_upgrade;");
-        lines.push('        proxy_set_header Connection $http_connection;');
-        lines.push("        proxy_buffering off;");
-        lines.push("        proxy_read_timeout 86400;");
-        lines.push("");
-
-        if (needsDockgeToken && dockgeToken) {
-            lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
-        }
-
-        lines.push("        include /etc/nginx/allowed_ips.conf;");
-        lines.push("    }");
-        lines.push("");
-
-        if (stackName === "dockge") {
-            lines.push("    location ~ ^/(assets|api|apple-touch-icon.png|icon.svg|favicon.ico) {");
-            lines.push(`        proxy_pass http://127.0.0.1:${port};`);
-            lines.push("        proxy_set_header Host $host;");
-            lines.push("        proxy_set_header X-Real-IP $remote_addr;");
-            lines.push("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;");
-            lines.push("        proxy_set_header X-Forwarded-Proto $scheme;");
-            lines.push("        proxy_http_version 1.1;");
-            lines.push("        proxy_set_header Upgrade $http_upgrade;");
-            lines.push('        proxy_set_header Connection $http_connection;');
-            lines.push("");
-
-            if (dockgeToken) {
-                lines.push(`        proxy_set_header Cookie "token=${dockgeToken}";`);
-            }
-
-            lines.push("        include /etc/nginx/allowed_ips.conf;");
-            lines.push("    }");
-            lines.push("");
-        }
-
-        lines.push("    client_max_body_size 0;");
-        lines.push("}");
-        return lines.join("\n");
-    }
+    }    
 
     /**
      * Generate extra HTTPS server blocks for URL:port mappings from x-dockge.urls

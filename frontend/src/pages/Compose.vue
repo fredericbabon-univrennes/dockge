@@ -85,14 +85,7 @@
                                 <small class="d-block text-muted mb-1">{{ $t("port") || "Port" }}</small>
                                 <p class="mb-3"><code>{{ nginxInfo.port }}</code></p>
                             </div>
-                        </template>
-                        <!-- Path Prefix (editable in create/edit mode, read-only in view mode) -->
-                        <div class="col-12">
-                            <small class="d-block text-muted mb-1">{{ $t("pathPrefix") || "Path Prefix" }}</small>
-                            <input v-if="isEditMode || isAdd" v-model="stack.nginxPathPrefix" type="text" class="form-control" placeholder="/" />
-                            <p v-else class="mb-3"><code>{{ nginxInfo.pathPrefix }}</code></p>
-                            <small v-if="isEditMode || isAdd" class="form-text text-muted">Default: /</small>
-                        </div>
+                        </template>                        
                     </div>
                 </div>
             </div>
@@ -363,10 +356,7 @@ export default {
             progressTerminalRows: PROGRESS_TERMINAL_ROWS,
             combinedTerminalRows: COMBINED_TERMINAL_ROWS,
             combinedTerminalCols: COMBINED_TERMINAL_COLS,
-            stack: {
-                nginxPort: 8080,
-                nginxPathPrefix: "/",
-            },
+            stack: {},
             serviceStatusList: {},
             dockerStats: {},
             gpuStats: {},
@@ -386,25 +376,11 @@ export default {
 
             const stackName = this.stack.name.toLowerCase();
             const domainSuffix = this.$root.info?.nginxDomainSuffix || "sslip.io";
-            const fqdn = `${stackName}.${domainSuffix}`;
-
-            // Try to load from server's Nginx config cache first
-            const nginxConfigCache = this.$root.info?.nginxConfigCache || {};
-            const cachedConfig = nginxConfigCache[stackName];
-
-            if (cachedConfig) {
-                return {
-                    fqdn: cachedConfig.fqdn || fqdn,
-                    port: cachedConfig.port || 8080,
-                    pathPrefix: cachedConfig.pathPrefix || "/",
-                };
-            }
+            const fqdn = `${stackName}.${domainSuffix}`;            
 
             // Fall back to stack properties if not in cache
             return {
-                fqdn: fqdn,
-                port: this.stack.nginxPort || 8080,
-                pathPrefix: this.stack.nginxPathPrefix || "/",
+                fqdn: fqdn
             };
         },
 
@@ -419,7 +395,7 @@ export default {
 
             let urls = [];
             for (const urlItem of this.envsubstJSONConfig["x-dockge"].urls) {
-                console.debug("urlItem="+urlItem);
+                
                 let display;
                 let actualUrl = urlItem;
 
@@ -431,9 +407,7 @@ export default {
                     if (/^\d+$/.test(potentialPort)) {
                         actualUrl = urlItem.substring(0, eqIndex);
                     }
-                }
-
-                console.debug("actualUrl="+actualUrl);
+                }               
 
                 try {
                     let obj = new URL(actualUrl);
@@ -444,14 +418,11 @@ export default {
                     display = obj.host + pathname + obj.search;
                 } catch (e) {
                     display = actualUrl;
-                }
-
-                console.debug("display="+display);
-                console.debug("actualUrl="+actualUrl);
+                }                
 
                 urls.push({
                     display,
-                    actualUrl,
+                    url:actualUrl,
                 });
             }
             return urls;

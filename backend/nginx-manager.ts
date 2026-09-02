@@ -15,9 +15,7 @@ import { NginxGenerator, NginxGeneratedConfigs, UrlPortMapping } from "./nginx-g
 import { getDefaultPathPrefix, extractPathPrefixFromNginxConfig } from "./nginx-config-parser";
 
 export interface StackNginxInfo {
-    name: string;
-    port: number;
-    pathPrefix: string;
+    name: string;    
     fqdn: string;
 }
 
@@ -34,21 +32,18 @@ export class NginxManager {
      * Create or update Nginx configuration for a stack
      */
     async createOrUpdateNginxConfig(
-        stack: Stack,                
-        customPathPrefix?: string,
+        stack: Stack,
         composeYAML?: string
     ): Promise<void> {
         try {
-            log.info("nginx-manager", `🔧 Processing Nginx for stack: ${stack.name}`);
-            log.info("nginx-manager", `   customPathPrefix=${customPathPrefix}`);
+            log.info("nginx-manager", `🔧 Processing Nginx for stack: ${stack.name}`);            
 
             // ========== 1. PREPARE STACK INFO ==========
             const stackInfo = this.prepareStackInfo(
-                stack.name,               
-                customPathPrefix,
+                stack.name,
                 composeYAML || stack.composeYAML
             );
-            log.info("nginx-manager", `   🎯 Stack Info: port=${stackInfo.port}, pathPrefix=${stackInfo.pathPrefix}, fqdn=${stackInfo.fqdn}`);
+            log.info("nginx-manager", `   🎯 Stack Info: fqdn=${stackInfo.fqdn}`);
 
             // ========== 1.5. PARSE EXTRA URL:MAPPINGS ==========
             const composeYAMLContent = composeYAML || stack.composeYAML;
@@ -59,14 +54,11 @@ export class NginxManager {
 
             // ========== 2. GENERATE CONFIGS ==========
             const nginxConfigs = this.generator.generateConfigs(
-                stack.name,
-                stackInfo.port,
-                stackInfo.pathPrefix,
+                stack.name,                
                 stackInfo.fqdn,
                 this.server.nginxAcmeDir,
                 this.server.nginxSslCert,
-                this.server.nginxSslKey,                
-                process.env.DOCKGE_TOKEN,
+                this.server.nginxSslKey,
                 extraUrlMappings.length > 0 ? extraUrlMappings : undefined
             );
 
@@ -138,16 +130,7 @@ export class NginxManager {
                 await this.restartNginx();
             } else {
                 log.warn("nginx-manager", `⏸️  Auto-restart disabled. To apply: systemctl restart nginx`);
-            }
-
-            // ========== 8. UPDATE CACHE ==========
-            this.server.nginxConfigCache[stack.name] = {
-                stackName: stack.name,
-                port: stackInfo.port,
-                pathPrefix: stackInfo.pathPrefix,
-                fqdn: stackInfo.fqdn
-            };
-            log.info("nginx-manager", `📦 Cache updated for: ${stack.name}`);
+            }            
 
         } catch (error: any) {
             log.error("nginx-manager", `❌ Error creating Nginx config: ${error.message}`);
@@ -202,11 +185,7 @@ export class NginxManager {
                 await this.restartNginx();
             } else {
                 log.warn("nginx-manager", `⏸️  Auto-restart disabled. To apply: systemctl restart nginx`);
-            }
-
-            // ========== 5. UPDATE CACHE ==========
-            delete this.server.nginxConfigCache[stackName];
-            log.info("nginx-manager", `📦 Cache cleared for: ${stackName}`);
+            }            
 
         } catch (error: any) {
             log.error("nginx-manager", `❌ Error deleting Nginx config: ${error.message}`);
@@ -313,30 +292,13 @@ export class NginxManager {
      * Prepare stack information for Nginx config generation
      */
     private prepareStackInfo(
-        stackName: string,        
-        customPathPrefix?: string,
+        stackName: string,                
         composeYAML?: string
     ): StackNginxInfo {
         const stackNameLower = stackName.toLowerCase();
         
         log.debug("nginx-manager", `📊 Preparing stack info for: ${stackName}`);
-        log.debug("nginx-manager", `   customPathPrefix=${customPathPrefix}, hasCompose=${!!composeYAML}`);
-        
-        // Port priority: custom > compose-extracted > default
-        const composeParsedPort = this.extractPortFromComposeYAML(composeYAML);
-        log.debug("nginx-manager", `   Port priority: compose=${composeParsedPort} > default=${this.server.nginxDefaultPort}`);
-        
-        const port = composeParsedPort || this.server.nginxDefaultPort;
-        log.debug("nginx-manager", `   ✅ Final port: ${port}`);
-        
-        // Path prefix priority: custom > existing nginx config > default
-        let pathPrefix = customPathPrefix;
-        if (!pathPrefix) {
-            // Try to load existing Nginx config to preserve path prefix
-            const existingPathPrefix = this.loadExistingPathPrefix(stackName);
-            pathPrefix = existingPathPrefix || getDefaultPathPrefix();
-        }
-        log.debug("nginx-manager", `   ✅ Final pathPrefix: ${pathPrefix}`);
+        log.debug("nginx-manager", `   hasCompose=${!!composeYAML}`);              
 
         // Generate FQDN with IP-dashed format if public IP is available
         let fqdn: string;
@@ -352,9 +314,7 @@ export class NginxManager {
         log.debug("nginx-manager", `   ✅ FQDN: ${fqdn}`);
 
         return {
-            name: stackName,
-            port,
-            pathPrefix,
+            name: stackName,            
             fqdn
         };
     }
@@ -473,6 +433,200 @@ export class NginxManager {
             return null;
         }
     }
+
+
+
+    /**
+     * Helper privé pour extraire tous les ports conteneurs uniques définis dans les services
+     */
+    private extractContainerPortsFromYaml(parsedYaml: any): number[] {
+        const portsSet = new Set<number>();
+
+        if (!parsedYaml?.services || typeof parsedYaml.services !== "object") {
+            return [];
+        }
+
+        for (const serviceName of Object.keys(parsedYaml.services)) {
+            const service = parsedYaml.services[serviceName];
+            if (!service?.ports || !Array.isArray(service.ports)) {
+                continue;
+            }
+
+            for (const p of service.ports) {
+                if (typeof p === "number") {
+                    portsSet.add(p);
+                } else if (typeof p === "string") {
+                    // Gère "8080:7474", "7474", "127.0.0.1:8080:7474/tcp"
+                    const cleanP = p.split("/")[0].trim();
+                    const parts = cleanP.split(":");
+                    const containerPortStr = parts[parts.length - 1];
+                    const parsed = parseInt(containerPortStr, 10);
+                    if (!isNaN(parsed)) {
+                        portsSet.add(parsed);
+                    }
+                } else if (typeof p === "object" && p !== null) {
+                    // Syntax long format: { target: 7474, published: 8080 }
+                    const target = parseInt(p.target, 10);
+                    if (!isNaN(target)) {
+                        portsSet.add(target);
+                    }
+                }
+            }
+        }
+
+        return Array.from(portsSet);
+    }
+
+    private extractUrlPortMappings(composeYAML?: string): UrlPortMapping[] {
+        if (!composeYAML || typeof composeYAML !== "string") {
+            return [];
+        }
+
+        let parsedYaml: any = null;
+        try {
+            log.debug("nginx-manager", `📋 Parsing x-dockge.urls with port mappings...`);
+            parsedYaml = yaml.parse(composeYAML);
+        } catch (e) {
+            log.error("[NGINX-MANAGER] Erreur lors du parsing YAML :", e);
+            return [];
+        }
+
+        if (!parsedYaml) {
+            return [];
+        }
+
+        // 1. Extraction des URLs sous x-dockge.urls
+        const rawUrls = parsedYaml["x-dockge"]?.urls;
+        if (!rawUrls || !Array.isArray(rawUrls)) {
+            log.debug("nginx-manager", `   No x-dockge.urls found`);
+            return [];
+        }
+
+        // 2. Extraction des ports conteneurs exposés dans la section services
+        const exposedContainerPorts = this.extractContainerPortsFromYaml(parsedYaml);
+        
+        // Si un seul et unique port conteneur est détecté dans toute la stack, il sert de port par défaut
+        const defaultPort = exposedContainerPorts.length === 1 ? exposedContainerPorts[0] : undefined;
+
+        const mappings: UrlPortMapping[] = [];
+        const portRegex = /^\d+(:\d+)?$/;
+
+        for (const rawItem of rawUrls) {
+            if (!rawItem || typeof rawItem !== "string") {
+                continue;
+            }
+
+            const parts = rawItem.split("|").map(p => p.trim());
+            const urlPart = parts[0];
+
+            if (!urlPart) {
+                continue;
+            }
+            let fqdn = undefined;
+            try {
+                const url = new URL(urlPart);
+                fqdn = url.hostname;
+            } catch (e) {
+                log.warn("nginx-manager", `⚠️  Invalid URL format: ${urlPart}`);
+                continue;
+            }
+
+            let portPart: string | undefined;
+            let pathPrefix = "/";
+
+            if (parts.length === 1) {
+                // Format: url
+                portPart = undefined;
+                pathPrefix = "/";
+            } else if (parts.length === 2) {
+                if (portRegex.test(parts[1])) {
+                    // Format: url|port OU url|public_port:container_port
+                    portPart = parts[1];
+                    pathPrefix = "/";
+                } else {
+                    // Format: url|pathPrefix
+                    portPart = undefined;
+                    pathPrefix = parts[1];
+                }
+            } else if (parts.length >= 3) {
+                // Format: url|port|pathPrefix OU url|public_port:container_port|pathPrefix
+                portPart = parts[1];
+                pathPrefix = parts[2] || "/";
+            }
+
+            // Parsing du port s'il est spécifié
+            let publicPort: number | undefined;
+            let containerPort: number | undefined;
+
+            if (portPart) {
+                if (portPart.includes(":")) {
+                    const [pubStr, contStr] = portPart.split(":").map(p => p.trim());
+                    const parsedPub = parseInt(pubStr, 10);
+                    const parsedCont = parseInt(contStr, 10);
+
+                    if (!isNaN(parsedPub)) publicPort = parsedPub;
+                    if (!isNaN(parsedCont)) containerPort = parsedCont;
+                } else {
+                    const parsedPort = parseInt(portPart, 10);
+                    if (!isNaN(parsedPort)) {
+                        containerPort = parsedPort;
+                    }
+                }
+            } else {
+                // Résolution automatique si aucun port n'est fourni dans la chaîne
+                if (defaultPort !== undefined) {
+                    containerPort = defaultPort;
+                } else {
+                    console.warn(
+                        `[NGINX-MANAGER] Impossible de déduire le port pour l'URL "${rawItem}". ` +
+                        `${exposedContainerPorts.length} port(s) conteneur(s) trouvé(s) dans le Compose, 1 seul attendu.`
+                    );
+                    continue;
+                }
+            }
+
+            if (!containerPort) {
+                console.warn(`[NGINX-MANAGER] Port conteneur invalide pour : "${rawItem}"`);
+                continue;
+            }
+
+            // Normalisation du pathPrefix
+            if (!pathPrefix.startsWith("/")) {
+                pathPrefix = `/${pathPrefix}`;
+            }
+
+            mappings.push({
+                url: urlPart,
+                fqdn: fqdn,
+                containerPort,
+                ...(publicPort !== undefined && { publicPort }),
+                pathPrefix,
+            });
+            if(publicPort !== undefined) {
+                log.info("nginx-manager", `✅ Added URL:public_port:container_port mapping: ${fqdn}${pathPrefix}:${publicPort} -> ${containerPort}`);
+            } else {
+                log.info("nginx-manager", `✅ Added URL:port mapping: ${fqdn}${pathPrefix} -> ${containerPort}`);
+            }
+        }
+
+        return mappings;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     /**
      * Extract extra URL:port mappings from x-dockge section of compose YAML
