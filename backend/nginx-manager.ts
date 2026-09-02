@@ -381,7 +381,8 @@ export class NginxManager {
 
 
     /**
-     * Helper privé pour extraire tous les ports conteneurs uniques définis dans les services
+     * Helper privé pour extraire tous les ports publics (host ports) uniques définis dans les services
+     * Pour le proxy_pass nginx, on a besoin des ports de l'hôte, pas des ports conteneurs
      */
     private extractContainerPortsFromYaml(parsedYaml: any): number[] {
         const portsSet = new Set<number>();
@@ -398,21 +399,47 @@ export class NginxManager {
 
             for (const p of service.ports) {
                 if (typeof p === "number") {
+                    // Port simple : c'est un port conteneur, on l'utilise directement
                     portsSet.add(p);
                 } else if (typeof p === "string") {
-                    // Gère "8080:7474", "7474", "127.0.0.1:8080:7474/tcp"
+                    // Gère "8890:8888" (host:container), "7474" (conteneur seul), "127.0.0.1:8080:7474/tcp"
                     const cleanP = p.split("/")[0].trim();
                     const parts = cleanP.split(":");
-                    const containerPortStr = parts[parts.length - 1];
-                    const parsed = parseInt(containerPortStr, 10);
-                    if (!isNaN(parsed)) {
-                        portsSet.add(parsed);
+                    
+                    if (parts.length === 1) {
+                        // Format simple: "7474" = port conteneur
+                        const parsed = parseInt(parts[0], 10);
+                        if (!isNaN(parsed)) {
+                            portsSet.add(parsed);
+                        }
+                    } else if (parts.length === 2) {
+                        // Format "host:container" ou "127.0.0.1:8888"
+                        // Prendre le PREMIER pour le host port
+                        const parsed = parseInt(parts[0], 10);
+                        if (!isNaN(parsed)) {
+                            portsSet.add(parsed);
+                        }
+                    } else if (parts.length === 3) {
+                        // Format "IP:host:container" => prendre le port public (2ème element)
+                        const parsed = parseInt(parts[1], 10);
+                        if (!isNaN(parsed)) {
+                            portsSet.add(parsed);
+                        }
                     }
                 } else if (typeof p === "object" && p !== null) {
                     // Syntax long format: { target: 7474, published: 8080 }
-                    const target = parseInt(p.target, 10);
-                    if (!isNaN(target)) {
-                        portsSet.add(target);
+                    // Pour proxy_pass, on utilise le "published" (port hôte), pas le "target" (port conteneur)
+                    if (p.published !== undefined) {
+                        const published = parseInt(p.published, 10);
+                        if (!isNaN(published)) {
+                            portsSet.add(published);
+                        }
+                    } else if (p.target !== undefined) {
+                        // Si pas de "published", utiliser "target" comme fallback
+                        const target = parseInt(p.target, 10);
+                        if (!isNaN(target)) {
+                            portsSet.add(target);
+                        }
                     }
                 }
             }
