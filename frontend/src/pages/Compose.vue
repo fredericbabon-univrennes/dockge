@@ -226,11 +226,11 @@
                     </div>
 
                     <!-- Nginx Configuration (read-only display) -->
-                    <div v-if="!isAdd && nginxConfig" class="mb-3">
+                    <div v-if="!isAdd && stack && stack.nginxConfig" class="mb-3">
                         <h4 class="mb-3">🔒 {{ $t("nginx") || "Nginx Configuration" }}</h4>
                         <div class="shadow-box mb-3 editor-box nginx-config-box">
                             <code-mirror
-                                v-model="nginxConfig"
+                                :value="stack.nginxConfig"
                                 :extensions="extensions"
                                 minimal
                                 wrap="true"
@@ -239,6 +239,15 @@
                                 :disabled="true"
                                 style="max-height: 400px; overflow-y: auto;"
                             />
+                        </div>
+                    </div>
+
+                    <!-- Debug: Show if nginxConfig is available -->
+                    <div v-else-if="!isAdd && stack" class="mb-3">
+                        <div class="alert alert-info small">
+                            nginxConfig disponible: {{ stack.nginxConfig ? 'OUI' : 'NON' }}
+                            <br/>Stack name: {{ stack.name }}
+                            <br/>Stack keys: {{ Object.keys(stack).join(', ') }}
                         </div>
                     </div>
 
@@ -364,13 +373,6 @@ export default {
         };
     },
     computed: {
-        nginxConfig() {
-            if (this.isAdd || !this.stack.name || !this.stack.nginxConfig) {
-                return null;
-            }
-            return this.stack.nginxConfig;
-        },
-
         endpointDisplay() {
             return this.$root.endpointDisplayFunction(this.endpoint);
         },
