@@ -394,35 +394,90 @@ export default {
             }
 
             let urls = [];
+            const portRegex = /^\d+(:\d+)?$/;
+
             for (const urlItem of this.envsubstJSONConfig["x-dockge"].urls) {
-                
-                let display;
-                let actualUrl = urlItem;
+                // Parse using the same logic as backend extractUrlPortMappings
+                const parts = urlItem.split("|").map(p => p.trim());
+                const urlPart = parts[0];
 
-                // Strip optional "=port" suffix for URL parsing
-                const eqIndex = urlItem.lastIndexOf("=");
-                if (eqIndex > 0) {
-                    const potentialPort = urlItem.substring(eqIndex + 1);
-                    // Only strip if the part after "=" looks like a port (digits only)
-                    if (/^\d+$/.test(potentialPort)) {
-                        actualUrl = urlItem.substring(0, eqIndex);
-                    }
-                }               
+                if (!urlPart) {
+                    continue;
+                }
 
+                let urlBase: URL;
                 try {
-                    let obj = new URL(actualUrl);
-                    let pathname = obj.pathname;
-                    if (pathname === "/") {
-                        pathname = "";
+                    urlBase = new URL(urlPart);
+                } catch (e) {
+                    console.warn(`Invalid URL format: ${urlPart}`);
+                    continue;
+                }
+
+                // Parse port and path components
+                let portPart: string | undefined;
+                let pathPrefix = "/";
+
+                if (parts.length === 1) {
+                    // Format: url
+                    portPart = undefined;
+                    pathPrefix = "/";
+                } else if (parts.length === 2) {
+                    if (portRegex.test(parts[1])) {
+                        // Format: url|port OR url|public_port:container_port
+                        portPart = parts[1];
+                        pathPrefix = "/";
+                    } else {
+                        // Format: url|pathPrefix
+                        portPart = undefined;
+                        pathPrefix = parts[1];
                     }
-                    display = obj.host + pathname + obj.search;
+                } else if (parts.length >= 3) {
+                    // Format: url|port|pathPrefix OR url|public_port:container_port|pathPrefix
+                    portPart = parts[1];
+                    pathPrefix = parts[2] || "/";
+                }
+
+                // Parse port information
+                let publicPort: number | undefined;
+                if (portPart) {
+                    if (portPart.includes(":")) {
+                        const [pubStr] = portPart.split(":").map(p => p.trim());
+                        const parsedPub = parseInt(pubStr, 10);
+                        if (!isNaN(parsedPub)) {
+                            publicPort = parsedPub;
+                        }
+                    }
+                    // Single port value is just for nginx config, not displayed in URL
+                }
+
+                // Construct the actual URL for href
+                let actualUrl = urlPart;
+                if (publicPort !== undefined) {
+                    // Add public port to URL: url:port
+                    actualUrl = urlBase.protocol + "//" + urlBase.hostname + ":" + publicPort;
+                }
+                if (pathPrefix && pathPrefix !== "/") {
+                    actualUrl = actualUrl.replace(/\/$/, "") + pathPrefix;
+                }
+
+                // Construct display text
+                let display: string;
+                try {
+                    let hostDisplay = urlBase.hostname;
+                    if (publicPort !== undefined) {
+                        hostDisplay = hostDisplay + ":" + publicPort;
+                    }
+                    if (pathPrefix && pathPrefix !== "/") {
+                        hostDisplay = hostDisplay + pathPrefix;
+                    }
+                    display = hostDisplay;
                 } catch (e) {
                     display = actualUrl;
-                }                
+                }
 
                 urls.push({
                     display,
-                    url:actualUrl,
+                    url: actualUrl,
                 });
             }
             return urls;
