@@ -231,7 +231,7 @@
                         <div class="shadow-box mb-3 editor-box nginx-config-box">
                             <div v-if="stack && stack.nginxConfig" class="nginx-config-content">
                                 <code-mirror
-                                    :value="stack.nginxConfig"
+                                    v-model="stack.nginxConfig"
                                     :extensions="extensions"
                                     minimal
                                     wrap="true"
