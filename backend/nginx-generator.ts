@@ -204,6 +204,8 @@ export class NginxGenerator {
         lines.push(`    ssl_certificate      ${sslCert};`);
         lines.push(`    ssl_certificate_key  ${sslKey};`);
         lines.push("");
+        lines.push("    include /etc/nginx/ip_security.conf;");
+        lines.push("");
 
         if (pathPrefix && pathPrefix !== "/") {
             lines.push("    location = / {");
@@ -222,9 +224,7 @@ export class NginxGenerator {
         lines.push("        proxy_set_header Upgrade $http_upgrade;");
         lines.push('        proxy_set_header Connection $http_connection;');
         lines.push("        proxy_buffering off;");
-        lines.push("        proxy_read_timeout 86400;");
-        lines.push("");
-        lines.push("        include /etc/nginx/allowed_ips.conf;");
+        lines.push("        proxy_read_timeout 86400;");        
         lines.push("    }");
         lines.push("");
 
